@@ -8,6 +8,5 @@
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true
-  },
-  "include": ["api/src"]
+  }
 }

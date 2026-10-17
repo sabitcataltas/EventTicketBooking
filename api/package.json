@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nodemon --watch src --exec node src/main.ts",
     "start": "node src/main.ts",
-    "test": "node --test"
+    "test": "node --test",
+    "type:check": "tsc"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
