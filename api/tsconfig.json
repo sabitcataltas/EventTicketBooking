@@ -1,4 +1,9 @@
 {
   "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "erasableSyntaxOnly": false,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
   "include": ["src"]
 }
