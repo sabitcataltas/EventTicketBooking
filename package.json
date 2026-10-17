@@ -1,0 +1,16 @@
+{
+  "name": "event-ticket-booking",
+  "private": true,
+  "type": "module",
+  "workspaces": ["api"],
+  "scripts": {
+    "dev": "npm run dev -w api",
+    "start": "npm start -w api",
+    "test": "npm test -w api",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --watch src --exec node src/main.ts",
+    "start": "node src/main.ts",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
