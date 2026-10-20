@@ -98,6 +98,14 @@ test("create starts with every ticket available", async () => {
   assert.equal(created.availableTickets, concert.capacity);
 });
 
+test("create rejects a date in the past with BadRequestException", async () => {
+  await assert.rejects(
+    service.create({ ...concert, date: Date.now() - 1000 }),
+    BadRequestException,
+  );
+  assert.equal(await repository.count(), 0);
+});
+
 test("read returns the event with the given id", async () => {
   const created = await service.create(concert);
 
@@ -125,6 +133,20 @@ test("update changes the event, bumps the version and refreshes updatedAt", asyn
   assert.ok(updated.updatedAt.getTime() >= created.updatedAt.getTime());
   assert.equal(updated.version, created.version + 1);
   assert.deepEqual(await service.read(created.id), updated);
+});
+
+test("update rejects a date in the past with BadRequestException", async () => {
+  const created = await service.create(concert);
+
+  await assert.rejects(
+    service.update(created.id, {
+      ...concert,
+      date: Date.now() - 1000,
+      version: created.version,
+    }),
+    BadRequestException,
+  );
+  assert.deepEqual(await service.read(created.id), created);
 });
 
 test("update shifts the available tickets by the capacity change", async () => {
@@ -226,6 +248,65 @@ test("delete throws NotFoundException for an unknown id", async () => {
   await assert.rejects(service.delete(999), NotFoundException);
 });
 
+test("delete rejects an event that has already started with BadRequestException", async () => {
+  const event = await repository.save(
+    repository.create({
+      ...concert,
+      date: Date.now() - 1000,
+      availableTickets: concert.capacity,
+    }),
+  );
+
+  await assert.rejects(service.delete(event.id), BadRequestException);
+  assert.deepEqual(await service.read(event.id), event);
+});
+
+test("delete rejects an event with pending or confirmed bookings with ConflictException", async () => {
+  for (const status of [BookingStatus.Pending, BookingStatus.Confirmed]) {
+    const event = await service.create(concert);
+    const booking = await service.createBooking(event.id, alice, 2);
+    await bookingRepository.update(booking.id, { status });
+
+    await assert.rejects(service.delete(event.id), ConflictException);
+    assert.ok(await repository.findOneBy({ id: event.id }));
+  }
+});
+
+test("delete removes an event whose bookings are cancelled or expired", async () => {
+  const event = await service.create(concert);
+  const cancelled = await service.createBooking(event.id, alice, 1);
+  const expiredBooking = await service.createBooking(event.id, bob, 1);
+  await bookingRepository.update(cancelled.id, {
+    status: BookingStatus.Cancelled,
+  });
+  await bookingRepository.update(expiredBooking.id, {
+    status: BookingStatus.Expired,
+  });
+
+  await service.delete(event.id);
+
+  assert.equal(await repository.findOneBy({ id: event.id }), null);
+});
+
+test("delete and a concurrent booking never leave a booking without its event", async () => {
+  const event = await service.create(concert);
+
+  const [deleted, booked] = await Promise.allSettled([
+    service.delete(event.id),
+    service.createBooking(event.id, alice, 1),
+  ]);
+
+  assert.notEqual(deleted.status, booked.status);
+  assert.equal(
+    await repository.countBy({ id: event.id }),
+    booked.status === "fulfilled" ? 1 : 0,
+  );
+  assert.equal(
+    await bookingRepository.countBy({ eventId: event.id }),
+    booked.status === "fulfilled" ? 1 : 0,
+  );
+});
+
 test("list returns the saved events ordered by id", async () => {
   const first = await service.create(concert);
   const second = await service.create({ ...concert, name: "Opera" });
@@ -310,6 +391,23 @@ test("createBooking rejects more tickets than available with BadRequestException
 
 test("createBooking throws NotFoundException for an unknown event", async () => {
   await assert.rejects(service.createBooking(999, alice, 1), NotFoundException);
+  assert.equal(await bookingRepository.count(), 0);
+});
+
+test("createBooking rejects an event that has already started with BadRequestException", async () => {
+  const event = await repository.save(
+    repository.create({
+      ...concert,
+      date: Date.now() - 1000,
+      availableTickets: concert.capacity,
+    }),
+  );
+
+  await assert.rejects(
+    service.createBooking(event.id, alice, 1),
+    BadRequestException,
+  );
+  assert.deepEqual(await service.read(event.id), event);
   assert.equal(await bookingRepository.count(), 0);
 });
 
@@ -410,6 +508,43 @@ test("cancelBooking rejects a cancelled or expired booking with BadRequestExcept
     );
   }
   assert.equal((await service.read(event.id)).availableTickets, 96);
+});
+
+test("cancelBooking rejects a pending booking past its expiry with BadRequestException", async () => {
+  const event = await service.create(concert);
+  const created = await service.createBooking(event.id, alice, 2);
+  await bookingRepository.update(created.id, { expiresAt: Date.now() - 1000 });
+  const booking = await bookingRepository.findOneByOrFail({ id: created.id });
+
+  await assert.rejects(
+    service.cancelBooking(event.id, booking.id, alice, booking.version),
+    BadRequestException,
+  );
+  assert.deepEqual(
+    await bookingRepository.findOneBy({ id: booking.id }),
+    booking,
+  );
+  assert.equal((await service.read(event.id)).availableTickets, 98);
+});
+
+test("cancelBooking cancels a confirmed booking past its payment hold", async () => {
+  const event = await service.create(concert);
+  const created = await service.createBooking(event.id, alice, 2);
+  await bookingRepository.update(created.id, {
+    status: BookingStatus.Confirmed,
+    expiresAt: Date.now() - 1000,
+  });
+  const booking = await bookingRepository.findOneByOrFail({ id: created.id });
+
+  const cancelled = await service.cancelBooking(
+    event.id,
+    booking.id,
+    alice,
+    booking.version,
+  );
+
+  assert.equal(cancelled.status, BookingStatus.Cancelled);
+  assert.equal((await service.read(event.id)).availableTickets, 100);
 });
 
 test("cancelBooking rejects a stale version with ConflictException", async () => {

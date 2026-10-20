@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { MoreThan, Repository, type EntityManager } from "typeorm";
+import { In, MoreThan, Repository, type EntityManager } from "typeorm";
 import { Booking, BookingStatus, Event } from "./Entity.ts";
 import { PaymentClient } from "./PaymentClient.ts";
 
@@ -30,7 +30,8 @@ export class EventManagementService {
     private readonly paymentClient: PaymentClient,
   ) {}
 
-  public create(event: EventInput): Promise<Event> {
+  public async create(event: EventInput): Promise<Event> {
+    this.assertUpcoming(event.date);
     return this.repository.save(
       this.repository.create({ ...event, availableTickets: event.capacity }),
     );
@@ -48,6 +49,7 @@ export class EventManagementService {
     id: number,
     { name, description, venue, date, capacity, version }: EventUpdateInput,
   ): Promise<Event> {
+    this.assertUpcoming(date);
     const result = await this.repository
       .createQueryBuilder()
       .update(Event)
@@ -77,9 +79,27 @@ export class EventManagementService {
     return this.read(id);
   }
 
-  public async delete(id: number): Promise<void> {
-    const event = await this.read(id);
-    await this.repository.remove(event);
+  public delete(id: number): Promise<void> {
+    return this.repository.manager.transaction(async (manager) => {
+      const event = await manager.findOne(Event, {
+        where: { id },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!event) {
+        throw new NotFoundException(`Event ${id} not found`);
+      }
+      if (event.date <= Date.now()) {
+        throw new BadRequestException(`Event ${id} has already started`);
+      }
+      const activeBookings = await manager.countBy(Booking, {
+        eventId: id,
+        status: In([BookingStatus.Pending, BookingStatus.Confirmed]),
+      });
+      if (activeBookings > 0) {
+        throw new ConflictException(`Event ${id} has active bookings`);
+      }
+      await manager.remove(event);
+    });
   }
 
   public async list(
@@ -100,13 +120,18 @@ export class EventManagementService {
     quantity: number,
   ): Promise<Booking> {
     return this.repository.manager.transaction(async (manager) => {
+      const now = Date.now();
       const result = await this.shiftAvailableTickets(
         manager,
         eventId,
         -quantity,
+        now,
       );
       if (result.affected === 0) {
-        await this.read(eventId);
+        const event = await this.read(eventId);
+        if (event.date <= now) {
+          throw new BadRequestException(`Event ${eventId} has already started`);
+        }
         throw new BadRequestException(
           `Event ${eventId} does not have ${quantity} available tickets`,
         );
@@ -117,7 +142,7 @@ export class EventManagementService {
           userId,
           quantity,
           status: BookingStatus.Pending,
-          expiresAt: Date.now() + bookingHoldMs,
+          expiresAt: now + bookingHoldMs,
         }),
       );
     });
@@ -145,6 +170,12 @@ export class EventManagementService {
         throw new BadRequestException(
           `Booking ${bookingId} cannot be cancelled`,
         );
+      }
+      if (
+        booking.status === BookingStatus.Pending &&
+        booking.expiresAt <= Date.now()
+      ) {
+        throw new BadRequestException(`Booking ${bookingId} has expired`);
       }
       const result = await manager.update(
         Booking,
@@ -234,6 +265,7 @@ export class EventManagementService {
     manager: EntityManager,
     eventId: number,
     change: number,
+    startsAfter: number = -1,
   ) {
     return manager
       .createQueryBuilder()
@@ -243,12 +275,19 @@ export class EventManagementService {
         version: () => "version + 1",
       })
       .where(
-        "id = :eventId AND availableTickets + :change BETWEEN 0 AND capacity",
+        "id = :eventId AND date > :startsAfter AND availableTickets + :change BETWEEN 0 AND capacity",
         {
           eventId,
           change,
+          startsAfter,
         },
       )
       .execute();
+  }
+
+  private assertUpcoming(date: number): void {
+    if (date <= Date.now()) {
+      throw new BadRequestException("Event date must be in the future");
+    }
   }
 }
