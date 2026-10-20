@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { config } from "../config.ts";
 import { hasRealmRole } from "../roles.ts";
+import { AddEventModal } from "./AddEventModal.tsx";
 
 type Event = {
   id: number;
@@ -34,6 +35,8 @@ export function EventList() {
   const [cursors, setCursors] = useState<number[]>([0]);
   const [page, setPage] = useState<EventPage>();
   const [error, setError] = useState<string>();
+  const [adding, setAdding] = useState(false);
+  const [reload, setReload] = useState(0);
   const after = cursors.at(-1)!;
 
   useEffect(() => {
@@ -62,7 +65,7 @@ export function EventList() {
         }
       });
     return () => controller.abort();
-  }, [accessToken, after]);
+  }, [accessToken, after, reload]);
 
   const hasNext = page?.items.length === pageSize;
 
@@ -83,7 +86,11 @@ export function EventList() {
       title="Events"
       extra={
         isAdmin && (
-          <Button type="primary" icon={<PlusOutlined />}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setAdding(true)}
+          >
             Add Event
           </Button>
         )
@@ -116,6 +123,15 @@ export function EventList() {
           </Button>
         </Flex>
       </Space>
+      <AddEventModal
+        open={adding}
+        onClose={() => setAdding(false)}
+        onCreated={() => {
+          setAdding(false);
+          setCursors([0]);
+          setReload(reload + 1);
+        }}
+      />
     </Card>
   );
 }
