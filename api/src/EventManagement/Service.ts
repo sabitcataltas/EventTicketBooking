@@ -14,7 +14,12 @@ const bookingHoldMs = 30 * 60 * 1000;
 
 export type EventInput = Omit<
   Event,
-  "id" | "availableTickets" | "createdAt" | "updatedAt" | "version"
+  | "id"
+  | "availableTickets"
+  | "createdAt"
+  | "updatedAt"
+  | "deletedAt"
+  | "version"
 >;
 
 export type EventUpdateInput = EventInput & Pick<Event, "version">;
@@ -63,7 +68,7 @@ export class EventManagementService {
         updatedAt: new Date(),
       })
       .where(
-        "id = :id AND version = :version AND availableTickets + :capacity - capacity >= 0",
+        "id = :id AND deletedAt IS NULL AND version = :version AND availableTickets + :capacity - capacity >= 0",
         { id, version, capacity },
       )
       .execute();
@@ -98,7 +103,7 @@ export class EventManagementService {
       if (activeBookings > 0) {
         throw new ConflictException(`Event ${id} has active bookings`);
       }
-      await manager.remove(event);
+      await manager.softRemove(event);
     });
   }
 
@@ -275,7 +280,7 @@ export class EventManagementService {
         version: () => "version + 1",
       })
       .where(
-        "id = :eventId AND date > :startsAfter AND availableTickets + :change BETWEEN 0 AND capacity",
+        "id = :eventId AND deletedAt IS NULL AND date > :startsAfter AND availableTickets + :change BETWEEN 0 AND capacity",
         {
           eventId,
           change,

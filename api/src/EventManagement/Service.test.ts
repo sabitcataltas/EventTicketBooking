@@ -244,8 +244,82 @@ test("delete removes the event", async () => {
   assert.equal(await repository.findOneBy({ id: created.id }), null);
 });
 
+test("delete soft deletes the event and keeps its row", async () => {
+  const created = await service.create(concert);
+
+  await service.delete(created.id);
+
+  const deleted = await repository.findOneOrFail({
+    where: { id: created.id },
+    withDeleted: true,
+  });
+  assert.ok(deleted.deletedAt instanceof Date);
+  assert.equal(deleted.name, created.name);
+});
+
 test("delete throws NotFoundException for an unknown id", async () => {
   await assert.rejects(service.delete(999), NotFoundException);
+});
+
+test("delete throws NotFoundException for a deleted event", async () => {
+  const created = await service.create(concert);
+  await service.delete(created.id);
+
+  await assert.rejects(service.delete(created.id), NotFoundException);
+});
+
+test("read throws NotFoundException for a deleted event", async () => {
+  const created = await service.create(concert);
+  await service.delete(created.id);
+
+  await assert.rejects(service.read(created.id), NotFoundException);
+});
+
+test("update throws NotFoundException for a deleted event", async () => {
+  const created = await service.create(concert);
+  await service.delete(created.id);
+  const deleted = await repository.findOneOrFail({
+    where: { id: created.id },
+    withDeleted: true,
+  });
+
+  await assert.rejects(
+    service.update(created.id, {
+      ...concert,
+      name: "Opera",
+      version: deleted.version,
+    }),
+    NotFoundException,
+  );
+  assert.deepEqual(
+    await repository.findOneOrFail({
+      where: { id: created.id },
+      withDeleted: true,
+    }),
+    deleted,
+  );
+});
+
+test("list skips deleted events", async () => {
+  const first = await service.create(concert);
+  const second = await service.create({ ...concert, name: "Opera" });
+  await service.delete(first.id);
+
+  assert.deepEqual(await service.list(), {
+    items: [second],
+    next: second.id,
+  });
+});
+
+test("createBooking throws NotFoundException for a deleted event", async () => {
+  const event = await service.create(concert);
+  await service.delete(event.id);
+
+  await assert.rejects(
+    service.createBooking(event.id, alice, 1),
+    NotFoundException,
+  );
+  assert.equal(await bookingRepository.count(), 0);
 });
 
 test("delete rejects an event that has already started with BadRequestException", async () => {

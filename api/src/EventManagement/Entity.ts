@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -41,6 +42,9 @@ export class Event {
 
   @UpdateDateColumn({ type: "datetime" })
   updatedAt!: Date;
+
+  @DeleteDateColumn({ type: "datetime", nullable: true })
+  deletedAt!: Date | null;
 
   @VersionColumn()
   version!: number;
