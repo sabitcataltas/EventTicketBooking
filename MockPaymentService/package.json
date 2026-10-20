@@ -4,6 +4,15 @@
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": {
+    "dev": "node --watch src/main.ts",
+    "start": "node src/main.ts",
+    "test": "node --test \"src/**/*.test.ts\"",
     "type:check": "tsc"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
   }
 }

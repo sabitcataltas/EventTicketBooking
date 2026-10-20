@@ -8,9 +8,10 @@
     "MockPaymentService"
   ],
   "scripts": {
-    "dev": "concurrently -n api,web \"npm run dev -w api\" \"npm run dev -w web\"",
+    "dev": "concurrently -n api,web,payment \"npm run dev -w api\" \"npm run dev -w web\" \"npm run dev -w mock-payment-service\"",
     "dev:api": "npm run dev -w api",
     "dev:web": "npm run dev -w web",
+    "dev:payment": "npm run dev -w mock-payment-service",
     "start": "concurrently -n api,web \"npm start -w api\" \"npm start -w web\"",
     "test": "npm test -w api",
     "test:prepare": "docker compose -f MySQL/docker-compose.test.yml up -d --wait && DB_HOST=127.0.0.1 DB_PORT=3307 DB_USER=app DB_PASSWORD=app DB_NAME=event_ticket_booking_test npm test; code=$?; docker compose -f MySQL/docker-compose.test.yml down -v; exit $code",
