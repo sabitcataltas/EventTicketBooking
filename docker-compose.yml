@@ -1,0 +1,5 @@
+name: event-ticket-booking
+
+include:
+  - IDProvider/docker-compose.yml
+  - MySQL/docker-compose.yml
