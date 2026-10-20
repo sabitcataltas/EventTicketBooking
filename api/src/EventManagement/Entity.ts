@@ -4,6 +4,7 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  VersionColumn,
   type ValueTransformer,
 } from "typeorm";
 
@@ -37,4 +38,7 @@ export class Event {
 
   @UpdateDateColumn({ transformer: millis })
   updatedAt!: number;
+
+  @VersionColumn()
+  version!: number;
 }
