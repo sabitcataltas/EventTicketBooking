@@ -32,6 +32,29 @@ export const listEventsQuerySchema = z.strictObject({
   }),
 });
 
+export const createBookingSchema = z.strictObject({
+  quantity: z.int().min(1).meta({ example: 2 }),
+});
+
+export const cancelBookingSchema = z.strictObject({
+  version: z.int().min(1).meta({
+    description: "Version last read by the client, for optimistic locking",
+    example: 1,
+  }),
+});
+
+export const listBookingsQuerySchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(100).optional().meta({
+    description: "Maximum number of bookings to return, defaults to 10",
+  }),
+  after: z.coerce.number().int().min(0).optional().meta({
+    description: "Return bookings with an id greater than this cursor",
+  }),
+});
+
 export type CreateEventDto = z.output<typeof createEventSchema>;
 export type UpdateEventDto = z.output<typeof updateEventSchema>;
 export type ListEventsQueryDto = z.output<typeof listEventsQuerySchema>;
+export type CreateBookingDto = z.output<typeof createBookingSchema>;
+export type CancelBookingDto = z.output<typeof cancelBookingSchema>;
+export type ListBookingsQueryDto = z.output<typeof listBookingsQuerySchema>;

@@ -11,18 +11,29 @@ import {
   Put,
   Query,
 } from "@nestjs/common";
-import { ApiBody } from "@nestjs/swagger";
-import { Roles, UserRole } from "../Security/Roles.ts";
+import { ApiBody, ApiOperation } from "@nestjs/swagger";
+import {
+  CurrentUser,
+  Roles,
+  UserRole,
+  type Principal,
+} from "../Security/Roles.ts";
 import { ApiQueryFrom, ZodValidationPipe, toOpenApi } from "../validation.ts";
 import {
+  cancelBookingSchema,
+  createBookingSchema,
   createEventSchema,
+  listBookingsQuerySchema,
   listEventsQuerySchema,
   updateEventSchema,
+  type CancelBookingDto,
+  type CreateBookingDto,
   type CreateEventDto,
+  type ListBookingsQueryDto,
   type ListEventsQueryDto,
   type UpdateEventDto,
 } from "./Dto.ts";
-import type { Event } from "./Entity.ts";
+import type { Booking, Event } from "./Entity.ts";
 import { EventManagementService } from "./Service.ts";
 
 @Controller("events")
@@ -47,6 +58,21 @@ export class EventManagementController {
     return this.service.list(limit, after);
   }
 
+  @Get("bookings")
+  @ApiOperation({
+    summary: "List the current user's bookings",
+    description:
+      "Returns the event bookings made by the authenticated user, ordered by booking id and paginated with an id cursor.",
+  })
+  @ApiQueryFrom(listBookingsQuerySchema)
+  public listBookings(
+    @CurrentUser() user: Principal,
+    @Query(new ZodValidationPipe(listBookingsQuerySchema))
+    { limit, after }: ListBookingsQueryDto,
+  ): Promise<{ items: Booking[]; next: number }> {
+    return this.service.listBookings(user.id, limit, after);
+  }
+
   @Get(":id")
   public read(@Param("id", ParseIntPipe) id: number): Promise<Event> {
     return this.service.read(id);
@@ -67,5 +93,29 @@ export class EventManagementController {
   @HttpCode(HttpStatus.NO_CONTENT)
   public delete(@Param("id", ParseIntPipe) id: number): Promise<void> {
     return this.service.delete(id);
+  }
+
+  @Post(":id/bookings")
+  @ApiBody({ schema: toOpenApi(createBookingSchema) })
+  public createBooking(
+    @Param("id", ParseIntPipe) id: number,
+    @CurrentUser() user: Principal,
+    @Body(new ZodValidationPipe(createBookingSchema))
+    { quantity }: CreateBookingDto,
+  ): Promise<Booking> {
+    return this.service.createBooking(id, user.id, quantity);
+  }
+
+  @Post(":id/bookings/:bookingId/cancel")
+  @HttpCode(HttpStatus.OK)
+  @ApiBody({ schema: toOpenApi(cancelBookingSchema) })
+  public cancelBooking(
+    @Param("id", ParseIntPipe) id: number,
+    @Param("bookingId", ParseIntPipe) bookingId: number,
+    @CurrentUser() user: Principal,
+    @Body(new ZodValidationPipe(cancelBookingSchema))
+    { version }: CancelBookingDto,
+  ): Promise<Booking> {
+    return this.service.cancelBooking(id, bookingId, user.id, version);
   }
 }

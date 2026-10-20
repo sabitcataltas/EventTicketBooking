@@ -28,6 +28,20 @@ const saved = {
 
 const savedJson = JSON.parse(JSON.stringify(saved));
 
+const booking = {
+  id: 3,
+  userId: "admin",
+  eventId: 1,
+  quantity: 2,
+  status: "PENDING",
+  expiresAt: Date.parse("2026-10-20T10:10:00.000Z"),
+  createdAt: new Date("2026-10-20T10:00:00.000Z"),
+  updatedAt: new Date("2026-10-20T10:00:00.000Z"),
+  version: 1,
+};
+
+const bookingJson = JSON.parse(JSON.stringify(booking));
+
 type Call = { method: string; args: unknown[] };
 
 let app: INestApplication;
@@ -57,6 +71,21 @@ const service = {
   list: async (...args: unknown[]) => {
     calls.push({ method: "list", args });
     return { items: [saved], next: 1 };
+  },
+  createBooking: async (...args: unknown[]) => {
+    calls.push({ method: "createBooking", args });
+    return booking;
+  },
+  cancelBooking: async (...args: unknown[]) => {
+    calls.push({ method: "cancelBooking", args });
+    if (conflict) {
+      throw new ConflictException("Booking 3 was modified concurrently");
+    }
+    return { ...booking, status: "CANCELLED", version: 2 };
+  },
+  listBookings: async (...args: unknown[]) => {
+    calls.push({ method: "listBookings", args });
+    return { items: [booking], next: 3 };
   },
 };
 
@@ -262,9 +291,120 @@ test("every event endpoint requires a bearer token", async () => {
     ["POST", "/events"],
     ["PUT", "/events/1"],
     ["DELETE", "/events/1"],
+    ["GET", "/events/bookings"],
+    ["POST", "/events/1/bookings"],
+    ["POST", "/events/1/bookings/3/cancel"],
   ]) {
     const response = await send(method, path, undefined, "");
     assert.equal(response.status, 401, `${method} ${path}`);
   }
   assert.deepEqual(calls, []);
+});
+
+test("POST /events/:id/bookings books tickets for the current user", async () => {
+  const response = await send("POST", "/events/1/bookings", { quantity: 2 });
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), bookingJson);
+  assert.deepEqual(calls, [{ method: "createBooking", args: [1, "admin", 2] }]);
+});
+
+test("POST /events/:id/bookings rejects an invalid request with 400", async () => {
+  const requests: [string, unknown][] = [
+    ["/events/abc/bookings", { quantity: 2 }],
+    ["/events/1/bookings", {}],
+    ["/events/1/bookings", { quantity: 0 }],
+    ["/events/1/bookings", { quantity: 1.5 }],
+    ["/events/1/bookings", { quantity: "2" }],
+    ["/events/1/bookings", { quantity: 2, status: "CONFIRMED" }],
+  ];
+
+  for (const [path, body] of requests) {
+    const response = await send("POST", path, body);
+    assert.equal(response.status, 400, `${path} ${JSON.stringify(body)}`);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test("POST /events/:id/bookings/:bookingId/cancel cancels the current user's booking with the client version", async () => {
+  const response = await send("POST", "/events/1/bookings/3/cancel", {
+    version: 1,
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ...bookingJson,
+    status: "CANCELLED",
+    version: 2,
+  });
+  assert.deepEqual(calls, [
+    { method: "cancelBooking", args: [1, 3, "admin", 1] },
+  ]);
+});
+
+test("POST /events/:id/bookings/:bookingId/cancel rejects an invalid request with 400", async () => {
+  const requests: [string, unknown][] = [
+    ["/events/abc/bookings/3/cancel", { version: 1 }],
+    ["/events/1/bookings/abc/cancel", { version: 1 }],
+    ["/events/1/bookings/3/cancel", {}],
+    ["/events/1/bookings/3/cancel", { version: 0 }],
+  ];
+
+  for (const [path, body] of requests) {
+    const response = await send("POST", path, body);
+    assert.equal(response.status, 400, `${path} ${JSON.stringify(body)}`);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test("POST /events/:id/bookings/:bookingId/cancel returns 409 on a version conflict", async () => {
+  conflict = true;
+
+  const response = await send("POST", "/events/1/bookings/3/cancel", {
+    version: 1,
+  });
+
+  assert.equal(response.status, 409);
+});
+
+test("GET /events/bookings lists the current user's bookings with limit and cursor", async () => {
+  const response = await send("GET", "/events/bookings?limit=5&after=2");
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { items: [bookingJson], next: 3 });
+  assert.deepEqual(calls, [{ method: "listBookings", args: ["admin", 5, 2] }]);
+});
+
+test("GET /events/bookings uses the service defaults without query", async () => {
+  const response = await send("GET", "/events/bookings");
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, [
+    { method: "listBookings", args: ["admin", undefined, undefined] },
+  ]);
+});
+
+test("GET /events/bookings rejects an invalid query with 400", async () => {
+  for (const query of ["limit=0", "limit=101", "limit=a", "after=-1"]) {
+    const response = await send("GET", `/events/bookings?${query}`);
+    assert.equal(response.status, 400, query);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test("a customer can book, cancel and list their bookings", async () => {
+  const requests: [string, string, unknown, string][] = [
+    ["POST", "/events/1/bookings", { quantity: 2 }, "createBooking"],
+    ["POST", "/events/1/bookings/3/cancel", { version: 1 }, "cancelBooking"],
+    ["GET", "/events/bookings", undefined, "listBookings"],
+  ];
+
+  for (const [method, path, body] of requests) {
+    const response = await send(method, path, body, "Bearer customer");
+    assert.ok(response.ok, `${method} ${path}`);
+  }
+  assert.deepEqual(
+    calls.map(({ method, args }) => [method, args.includes("customer")]),
+    requests.map(([, , , method]) => [method, true]),
+  );
 });

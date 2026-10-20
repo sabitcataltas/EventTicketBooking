@@ -24,7 +24,10 @@ test("setupSwagger serves the OpenAPI document for the event endpoints", async (
   assert.equal(response.status, 200);
   assert.deepEqual(Object.keys(document.paths).sort(), [
     "/events",
+    "/events/bookings",
     "/events/{id}",
+    "/events/{id}/bookings",
+    "/events/{id}/bookings/{bookingId}/cancel",
   ]);
   assert.deepEqual(
     document.paths["/events/{id}"].put.requestBody.content["application/json"]
@@ -36,6 +39,31 @@ test("setupSwagger serves the OpenAPI document for the event endpoints", async (
       ({ name }: { name: string }) => name,
     ),
     ["limit", "after"],
+  );
+  assert.deepEqual(
+    document.paths["/events/{id}/bookings"].post.requestBody.content[
+      "application/json"
+    ].schema.required,
+    ["quantity"],
+  );
+  assert.deepEqual(
+    document.paths["/events/{id}/bookings/{bookingId}/cancel"].post.requestBody
+      .content["application/json"].schema.required,
+    ["version"],
+  );
+  assert.deepEqual(
+    document.paths["/events/bookings"].get.parameters.map(
+      ({ name }: { name: string }) => name,
+    ),
+    ["limit", "after"],
+  );
+  assert.equal(
+    document.paths["/events/bookings"].get.summary,
+    "List the current user's bookings",
+  );
+  assert.equal(
+    document.paths["/events/bookings"].get.description,
+    "Returns the event bookings made by the authenticated user, ordered by booking id and paginated with an id cursor.",
   );
   assert.deepEqual(document.security, [{ bearer: [] }]);
   assert.equal(document.components.securitySchemes.bearer.scheme, "bearer");
