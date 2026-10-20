@@ -4,7 +4,8 @@
   "type": "module",
   "workspaces": [
     "Api",
-    "Web"
+    "Web",
+    "MockPaymentService"
   ],
   "scripts": {
     "dev": "concurrently -n api,web \"npm run dev -w api\" \"npm run dev -w web\"",
