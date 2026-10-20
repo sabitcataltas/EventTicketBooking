@@ -2,13 +2,15 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MoreThan, Repository, type EntityManager } from "typeorm";
 import { Booking, BookingStatus, Event } from "./Entity.ts";
+import { PaymentClient } from "./PaymentClient.ts";
 
-const bookingHoldMs = 10 * 60 * 1000;
+const bookingHoldMs = 30 * 60 * 1000;
 
 export type EventInput = Omit<
   Event,
@@ -19,10 +21,13 @@ export type EventUpdateInput = EventInput & Pick<Event, "version">;
 
 @Injectable()
 export class EventManagementService {
+  private readonly logger = new Logger(EventManagementService.name);
+
   constructor(
     @InjectRepository(Event) private readonly repository: Repository<Event>,
     @InjectRepository(Booking)
     private readonly bookingRepository: Repository<Booking>,
+    private readonly paymentClient: PaymentClient,
   ) {}
 
   public create(event: EventInput): Promise<Event> {
@@ -177,6 +182,52 @@ export class EventManagementService {
       take: limit,
     });
     return { items, next: items.at(-1)?.id ?? after };
+  }
+
+  public async settlePendingBookings(now: number = Date.now()): Promise<void> {
+    const bookings = await this.bookingRepository.findBy({
+      status: BookingStatus.Pending,
+    });
+    for (const booking of bookings) {
+      try {
+        if (await this.paymentClient.isPaid(booking.id)) {
+          await this.settleBooking(booking, BookingStatus.Confirmed);
+        } else if (booking.expiresAt <= now) {
+          await this.settleBooking(booking, BookingStatus.Expired);
+        }
+      } catch (error) {
+        this.logger.error(`Booking ${booking.id} could not be settled`, error);
+      }
+    }
+  }
+
+  private settleBooking(
+    { id, eventId, quantity, version }: Booking,
+    status: BookingStatus.Confirmed | BookingStatus.Expired,
+  ): Promise<void> {
+    return this.repository.manager.transaction(async (manager) => {
+      const result = await manager.update(
+        Booking,
+        { id, version },
+        { status, updatedAt: new Date() },
+      );
+      if (result.affected === 0) {
+        throw new ConflictException(`Booking ${id} was modified concurrently`);
+      }
+      if (status === BookingStatus.Confirmed) {
+        return;
+      }
+      const shifted = await this.shiftAvailableTickets(
+        manager,
+        eventId,
+        quantity,
+      );
+      if (shifted.affected === 0) {
+        throw new ConflictException(
+          `Event ${eventId} cannot take back ${quantity} tickets`,
+        );
+      }
+    });
   }
 
   private shiftAvailableTickets(

@@ -10,12 +10,15 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { TypeOrmModule, getRepositoryToken } from "@nestjs/typeorm";
 import type { Repository } from "typeorm";
 import { Booking, BookingStatus, Event } from "./Entity.ts";
+import { PaymentClient } from "./PaymentClient.ts";
 import { EventManagementService, type EventInput } from "./Service.ts";
 
 let moduleRef: TestingModule;
 let service: EventManagementService;
 let repository: Repository<Event>;
 let bookingRepository: Repository<Booking>;
+
+let isPaid: (bookingId: number) => Promise<boolean>;
 
 const alice = "6f1c2b8e-3d4a-4b5c-9e7f-0a1b2c3d4e5f";
 const bob = "7a2d3c9f-4e5b-4c6d-8f9a-1b2c3d4e5f6a";
@@ -45,7 +48,13 @@ before(async () => {
       }),
       TypeOrmModule.forFeature([Event, Booking]),
     ],
-    providers: [EventManagementService],
+    providers: [
+      EventManagementService,
+      {
+        provide: PaymentClient,
+        useValue: { isPaid: (bookingId: number) => isPaid(bookingId) },
+      },
+    ],
   }).compile();
 
   service = moduleRef.get(EventManagementService);
@@ -54,6 +63,7 @@ before(async () => {
 });
 
 beforeEach(async () => {
+  isPaid = async () => false;
   await repository.clear();
   await bookingRepository.clear();
 });
@@ -257,7 +267,7 @@ test("list returns no events and keeps the cursor when nothing is left", async (
   });
 });
 
-test("createBooking saves a pending booking that expires in 10 minutes", async () => {
+test("createBooking saves a pending booking that expires in 30 minutes", async () => {
   const event = await service.create(concert);
   const before = Date.now();
 
@@ -269,8 +279,8 @@ test("createBooking saves a pending booking that expires in 10 minutes", async (
   assert.equal(booking.quantity, 2);
   assert.equal(booking.status, BookingStatus.Pending);
   assert.equal(booking.version, 1);
-  assert.ok(booking.expiresAt >= before + 10 * 60 * 1000);
-  assert.ok(booking.expiresAt <= Date.now() + 10 * 60 * 1000);
+  assert.ok(booking.expiresAt >= before + 30 * 60 * 1000);
+  assert.ok(booking.expiresAt <= Date.now() + 30 * 60 * 1000);
   assert.deepEqual(
     await bookingRepository.findOneBy({ id: booking.id }),
     booking,
@@ -496,4 +506,121 @@ test("listBookings returns no bookings and keeps the cursor when nothing is left
     items: [],
     next: 5,
   });
+});
+
+const expired = Date.now() + 31 * 60 * 1000;
+
+test("settlePendingBookings confirms a paid booking, bumps its version and keeps its tickets", async () => {
+  const event = await service.create(concert);
+  const booking = await service.createBooking(event.id, alice, 2);
+  isPaid = async (bookingId) => bookingId === booking.id;
+
+  await service.settlePendingBookings(expired);
+
+  const settled = await bookingRepository.findOneByOrFail({ id: booking.id });
+  assert.equal(settled.status, BookingStatus.Confirmed);
+  assert.equal(settled.version, booking.version + 1);
+  assert.equal((await service.read(event.id)).availableTickets, 98);
+});
+
+test("settlePendingBookings expires an unpaid booking past its expiry and returns its tickets", async () => {
+  const event = await service.create(concert);
+  const booking = await service.createBooking(event.id, alice, 2);
+
+  await service.settlePendingBookings(expired);
+
+  const settled = await bookingRepository.findOneByOrFail({ id: booking.id });
+  assert.equal(settled.status, BookingStatus.Expired);
+  assert.equal(settled.version, booking.version + 1);
+  assert.equal((await service.read(event.id)).availableTickets, 100);
+});
+
+test("settlePendingBookings keeps an unpaid booking pending until it expires", async () => {
+  const event = await service.create(concert);
+  const booking = await service.createBooking(event.id, alice, 2);
+
+  await service.settlePendingBookings();
+
+  assert.deepEqual(
+    await bookingRepository.findOneBy({ id: booking.id }),
+    booking,
+  );
+  assert.equal((await service.read(event.id)).availableTickets, 98);
+});
+
+test("settlePendingBookings leaves settled bookings untouched", async () => {
+  const event = await service.create(concert);
+  const bookings = [];
+  for (const status of [
+    BookingStatus.Confirmed,
+    BookingStatus.Cancelled,
+    BookingStatus.Expired,
+  ]) {
+    bookings.push(
+      await setStatus(await service.createBooking(event.id, alice, 1), status),
+    );
+  }
+  isPaid = async () => {
+    throw new Error("Payment service should not be queried");
+  };
+
+  await service.settlePendingBookings(expired);
+
+  assert.deepEqual(
+    await bookingRepository.find({ order: { id: "ASC" } }),
+    bookings,
+  );
+  assert.equal((await service.read(event.id)).availableTickets, 97);
+});
+
+test("settlePendingBookings keeps the booking pending when the event cannot take back its tickets", async () => {
+  const event = await service.create(concert);
+  const booking = await service.createBooking(event.id, alice, 2);
+  await repository.update(event.id, { availableTickets: 99 });
+
+  await service.settlePendingBookings(expired);
+
+  assert.deepEqual(
+    await bookingRepository.findOneBy({ id: booking.id }),
+    booking,
+  );
+  assert.equal((await service.read(event.id)).availableTickets, 99);
+});
+
+test("settlePendingBookings does not expire a booking cancelled while querying its payment", async () => {
+  const event = await service.create(concert);
+  const booking = await service.createBooking(event.id, alice, 2);
+  isPaid = async () => {
+    await service.cancelBooking(event.id, booking.id, alice, booking.version);
+    return false;
+  };
+
+  await service.settlePendingBookings(expired);
+
+  const settled = await bookingRepository.findOneByOrFail({ id: booking.id });
+  assert.equal(settled.status, BookingStatus.Cancelled);
+  assert.equal((await service.read(event.id)).availableTickets, 100);
+});
+
+test("settlePendingBookings keeps settling the other bookings when one fails", async () => {
+  const event = await service.create(concert);
+  const failing = await service.createBooking(event.id, alice, 1);
+  const paid = await service.createBooking(event.id, bob, 1);
+  isPaid = async (bookingId) => {
+    if (bookingId === failing.id) {
+      throw new Error("Payment service unavailable");
+    }
+    return true;
+  };
+
+  await service.settlePendingBookings(expired);
+
+  assert.deepEqual(
+    await bookingRepository.findOneBy({ id: failing.id }),
+    failing,
+  );
+  assert.equal(
+    (await bookingRepository.findOneByOrFail({ id: paid.id })).status,
+    BookingStatus.Confirmed,
+  );
 });
