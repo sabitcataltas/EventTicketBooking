@@ -1,6 +1,6 @@
 import { Controller, Get, Post } from "@nestjs/common";
 import { CurrentUser } from "../Security/CurrentUser.ts";
-import type { Principal } from "../Security/Guard.ts";
+import type { Principal } from "../Security/Roles.ts";
 import type { User } from "./Entity.ts";
 import { UserManagementService } from "./Service.ts";
 

@@ -5,7 +5,8 @@ import { NotFoundException } from "@nestjs/common";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { TypeOrmModule, getRepositoryToken } from "@nestjs/typeorm";
 import type { Repository } from "typeorm";
-import { User, UserRole } from "./Entity.ts";
+import { UserRole } from "../Security/Roles.ts";
+import { User } from "./Entity.ts";
 import { UserManagementService } from "./Service.ts";
 
 let moduleRef: TestingModule;

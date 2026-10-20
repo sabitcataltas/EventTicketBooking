@@ -7,11 +7,8 @@ import {
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import type { JWTPayload } from "jose";
-import { UserRole, type User } from "../UserManagement/Entity.ts";
-import { Roles } from "./Roles.ts";
+import { Roles, UserRole, type Principal } from "./Roles.ts";
 import { SecurityService } from "./Service.ts";
-
-export type Principal = Pick<User, "id" | "email" | "role">;
 
 type AuthenticatedRequest = {
   headers: { authorization?: string };

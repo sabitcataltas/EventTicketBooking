@@ -5,9 +5,9 @@ import { type INestApplication } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { Test } from "@nestjs/testing";
 import { SecurityGuard } from "../Security/Guard.ts";
+import { UserRole } from "../Security/Roles.ts";
 import { SecurityService } from "../Security/Service.ts";
 import { UserManagementController } from "./Controller.ts";
-import { UserRole } from "./Entity.ts";
 import { UserManagementService } from "./Service.ts";
 
 const principal = {

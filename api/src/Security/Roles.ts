@@ -1,4 +1,14 @@
 import { Reflector } from "@nestjs/core";
-import type { UserRole } from "../UserManagement/Entity.ts";
+
+export enum UserRole {
+  Customer = "CUSTOMER",
+  Admin = "ADMIN",
+}
+
+export type Principal = {
+  id: string;
+  email: string;
+  role: UserRole;
+};
 
 export const Roles = Reflector.createDecorator<UserRole[]>();

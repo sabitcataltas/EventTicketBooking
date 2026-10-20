@@ -1,9 +1,5 @@
 import { Column, Entity, PrimaryColumn } from "typeorm";
-
-export enum UserRole {
-  Customer = "CUSTOMER",
-  Admin = "ADMIN",
-}
+import { UserRole } from "../Security/Roles.ts";
 
 @Entity("users")
 export class User {

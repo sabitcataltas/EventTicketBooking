@@ -12,8 +12,7 @@ import {
   Query,
 } from "@nestjs/common";
 import { ApiBody } from "@nestjs/swagger";
-import { Roles } from "../Security/Roles.ts";
-import { UserRole } from "../UserManagement/Entity.ts";
+import { Roles, UserRole } from "../Security/Roles.ts";
 import { ApiQueryFrom, ZodValidationPipe, toOpenApi } from "../validation.ts";
 import {
   createEventSchema,
