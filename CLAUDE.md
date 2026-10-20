@@ -37,3 +37,9 @@ APIs are built with Test-Driven Development (TDD):
 1. Write a failing test for the API behavior first.
 2. Write the minimal code to make the test pass.
 3. Refactor while keeping tests green.
+
+## Git
+
+Only run read-only git commands (`status`, `diff`, `log`, `show`, `blame`, ...) without asking.
+
+Never run git commands that change the repository or working tree (`commit`, `add`, `restore`, `reset`, `stash`, `checkout`, `switch`, `merge`, `rebase`, `push`, `pull`, ...) without asking the user for permission first.
