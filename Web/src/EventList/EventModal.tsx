@@ -7,11 +7,13 @@ import {
   Modal,
   type DatePickerProps,
 } from "antd";
+import dayjs from "dayjs";
 import { useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { config } from "../config.ts";
+import type { Event } from "./EventList.tsx";
 
-type AddEventForm = {
+type EventForm = {
   name: string;
   description?: string;
   venue: string;
@@ -19,45 +21,48 @@ type AddEventForm = {
   capacity: number;
 };
 
-type AddEventModalProps = {
+type EventModalProps = {
   open: boolean;
+  event?: Event;
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
 };
 
-export function AddEventModal({
-  open,
-  onClose,
-  onCreated,
-}: AddEventModalProps) {
+export function EventModal({ open, event, onClose, onSaved }: EventModalProps) {
   const auth = useAuth();
-  const [form] = Form.useForm<AddEventForm>();
+  const [form] = Form.useForm<EventForm>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
 
-  const submit = async (values: AddEventForm) => {
+  const submit = async (values: EventForm) => {
     setSubmitting(true);
     setError(undefined);
     try {
-      const response = await fetch(`${config.apiUrl}/events`, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${auth.user?.access_token}`,
-          "content-type": "application/json",
+      const response = await fetch(
+        `${config.apiUrl}/events${event ? `/${event.id}` : ""}`,
+        {
+          method: event ? "PUT" : "POST",
+          headers: {
+            authorization: `Bearer ${auth.user?.access_token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            name: values.name,
+            description: values.description || null,
+            venue: values.venue,
+            date: values.date.valueOf(),
+            capacity: values.capacity,
+            ...(event && { version: event.version }),
+          }),
         },
-        body: JSON.stringify({
-          name: values.name,
-          description: values.description || null,
-          venue: values.venue,
-          date: values.date.valueOf(),
-          capacity: values.capacity,
-        }),
-      });
+      );
       if (!response.ok) {
-        throw new Error(`Failed to create event (${response.status})`);
+        throw new Error(
+          `Failed to ${event ? "update" : "create"} event (${response.status})`,
+        );
       }
       form.resetFields();
-      onCreated();
+      onSaved();
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
@@ -67,9 +72,9 @@ export function AddEventModal({
 
   return (
     <Modal
-      title="Add Event"
+      title={event ? "Edit Event" : "Add Event"}
       open={open}
-      okText="Create"
+      okText={event ? "Save" : "Create"}
       confirmLoading={submitting}
       onOk={() => form.submit()}
       onCancel={() => {
@@ -86,7 +91,19 @@ export function AddEventModal({
           style={{ marginBottom: 16 }}
         />
       )}
-      <Form form={form} layout="vertical" onFinish={submit} preserve={false}>
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={submit}
+        preserve={false}
+        initialValues={
+          event && {
+            ...event,
+            description: event.description ?? undefined,
+            date: dayjs(event.date),
+          }
+        }
+      >
         <Form.Item
           name="name"
           label="Name"

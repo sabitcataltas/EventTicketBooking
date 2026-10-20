@@ -1,9 +1,16 @@
-import { LeftOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  LeftOutlined,
+  PlusOutlined,
+  RightOutlined,
+} from "@ant-design/icons";
 import {
   Alert,
   Button,
   Card,
   Flex,
+  Popconfirm,
   Space,
   Table,
   Typography,
@@ -13,15 +20,16 @@ import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { config } from "../config.ts";
 import { hasRealmRole } from "../roles.ts";
-import { AddEventModal } from "./AddEventModal.tsx";
+import { EventModal } from "./EventModal.tsx";
 
-type Event = {
+export type Event = {
   id: number;
   name: string;
   description: string | null;
   venue: string;
   date: number;
   capacity: number;
+  version: number;
 };
 
 type EventPage = { items: Event[]; next: number };
@@ -36,6 +44,7 @@ export function EventList() {
   const [page, setPage] = useState<EventPage>();
   const [error, setError] = useState<string>();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Event>();
   const [reload, setReload] = useState(0);
   const after = cursors.at(-1)!;
 
@@ -69,6 +78,18 @@ export function EventList() {
 
   const hasNext = page?.items.length === pageSize;
 
+  const remove = async (event: Event) => {
+    const response = await fetch(`${config.apiUrl}/events/${event.id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      setError(`Failed to delete event (${response.status})`);
+      return;
+    }
+    setReload(reload + 1);
+  };
+
   const columns: TableColumnsType<Event> = [
     { title: "Name", dataIndex: "name" },
     {
@@ -79,6 +100,34 @@ export function EventList() {
     { title: "Venue", dataIndex: "venue" },
     { title: "Capacity", dataIndex: "capacity", align: "right" },
     { title: "Description", dataIndex: "description" },
+    ...(isAdmin
+      ? [
+          {
+            title: "Actions",
+            key: "actions",
+            render: (_: unknown, event: Event) => (
+              <Space>
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => setEditing(event)}
+                >
+                  Edit
+                </Button>
+                <Popconfirm
+                  title="Delete this event?"
+                  okText="Delete"
+                  okButtonProps={{ danger: true }}
+                  onConfirm={() => remove(event)}
+                >
+                  <Button danger icon={<DeleteOutlined />}>
+                    Delete
+                  </Button>
+                </Popconfirm>
+              </Space>
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -123,12 +172,22 @@ export function EventList() {
           </Button>
         </Flex>
       </Space>
-      <AddEventModal
+      <EventModal
         open={adding}
         onClose={() => setAdding(false)}
-        onCreated={() => {
+        onSaved={() => {
           setAdding(false);
           setCursors([0]);
+          setReload(reload + 1);
+        }}
+      />
+      <EventModal
+        key={editing?.id}
+        open={!!editing}
+        event={editing}
+        onClose={() => setEditing(undefined)}
+        onSaved={() => {
+          setEditing(undefined);
           setReload(reload + 1);
         }}
       />
