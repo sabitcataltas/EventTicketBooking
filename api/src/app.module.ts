@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
+import { ServeStaticModule } from "@nestjs/serve-static";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Booking, Event } from "./EventManagement/Entity.ts";
 import { EventManagementModule } from "./EventManagement/Module.ts";
@@ -29,6 +30,14 @@ import { UserManagementModule } from "./UserManagement/Module.ts";
     SecurityModule,
     EventManagementModule,
     UserManagementModule,
+    ...(process.env.WEB_DIST_DIR
+      ? [
+          ServeStaticModule.forRoot({
+            rootPath: process.env.WEB_DIST_DIR,
+            serveRoot: "/app",
+          }),
+        ]
+      : []),
   ],
 })
 export class AppModule {}
