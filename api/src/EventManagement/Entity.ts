@@ -9,8 +9,8 @@ import {
 } from "typeorm";
 
 const millis: ValueTransformer = {
-  to: (value?: number) => (value == null ? value : new Date(value)),
-  from: (value?: Date) => (value == null ? value : value.getTime()),
+  to: (value?: number) => value,
+  from: (value?: string) => (value == null ? value : Number(value)),
 };
 
 @Entity("events")
@@ -27,17 +27,17 @@ export class Event {
   @Column({ type: "varchar", length: 200 })
   venue!: string;
 
-  @Column({ type: "datetime", transformer: millis })
+  @Column({ type: "bigint", transformer: millis })
   date!: number;
 
   @Column({ type: "int" })
   capacity!: number;
 
-  @CreateDateColumn({ transformer: millis })
-  createdAt!: number;
+  @CreateDateColumn({ type: "datetime" })
+  createdAt!: Date;
 
-  @UpdateDateColumn({ transformer: millis })
-  updatedAt!: number;
+  @UpdateDateColumn({ type: "datetime" })
+  updatedAt!: Date;
 
   @VersionColumn()
   version!: number;

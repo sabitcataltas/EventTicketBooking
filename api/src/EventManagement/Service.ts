@@ -1,7 +1,18 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MoreThan, Repository } from "typeorm";
 import { Event } from "./Entity.ts";
+
+export type EventInput = Omit<
+  Event,
+  "id" | "createdAt" | "updatedAt" | "version"
+>;
+
+export type EventUpdateInput = EventInput & Pick<Event, "version">;
 
 @Injectable()
 export class EventManagementService {
@@ -9,7 +20,7 @@ export class EventManagementService {
     @InjectRepository(Event) private readonly repository: Repository<Event>,
   ) {}
 
-  public create(event: Omit<Event, "id">): Promise<Event> {
+  public create(event: EventInput): Promise<Event> {
     return this.repository.save(this.repository.create(event));
   }
 
@@ -21,9 +32,19 @@ export class EventManagementService {
     return event;
   }
 
-  public async update(id: number, event: Omit<Event, "id">): Promise<Event> {
-    const existing = await this.read(id);
-    return this.repository.save(this.repository.merge(existing, event));
+  public async update(
+    id: number,
+    { name, description, venue, date, capacity, version }: EventUpdateInput,
+  ): Promise<Event> {
+    await this.read(id);
+    const result = await this.repository.update(
+      { id, version },
+      { name, description, venue, date, capacity, updatedAt: new Date() },
+    );
+    if (result.affected === 0) {
+      throw new ConflictException(`Event ${id} was modified concurrently`);
+    }
+    return this.read(id);
   }
 
   public async delete(id: number): Promise<void> {
