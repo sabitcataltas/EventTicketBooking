@@ -10,9 +10,8 @@ import {
 } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { Test } from "@nestjs/testing";
-import { CurrentUser } from "./CurrentUser.ts";
-import { SecurityGuard } from "./Guard.ts";
-import { Roles, UserRole, type Principal } from "./Roles.ts";
+import { SecurityGuard } from "./Module.ts";
+import { CurrentUser, Roles, UserRole, type Principal } from "./Roles.ts";
 import { SecurityService } from "./Service.ts";
 
 @Controller("probe")

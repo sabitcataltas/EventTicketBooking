@@ -4,7 +4,7 @@ import { after, before, beforeEach, test } from "node:test";
 import { ConflictException, type INestApplication } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { Test } from "@nestjs/testing";
-import { SecurityGuard } from "../Security/Guard.ts";
+import { SecurityGuard } from "../Security/Module.ts";
 import { SecurityService } from "../Security/Service.ts";
 import { EventManagementController } from "./Controller.ts";
 import { EventManagementService } from "./Service.ts";
