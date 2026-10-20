@@ -2,6 +2,50 @@
   "realm": "event-ticket-booking",
   "enabled": true,
   "registrationAllowed": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "CUSTOMER"
+      },
+      {
+        "name": "ADMIN"
+      },
+      {
+        "name": "offline_access"
+      },
+      {
+        "name": "uma_authorization"
+      },
+      {
+        "name": "default-roles-event-ticket-booking",
+        "composite": true,
+        "composites": {
+          "realm": ["offline_access", "uma_authorization", "CUSTOMER"]
+        }
+      }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles-event-ticket-booking"
+  },
+  "users": [
+    {
+      "username": "${REALM_ADMIN_EMAIL}",
+      "email": "${REALM_ADMIN_EMAIL}",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Admin",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${REALM_ADMIN_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["default-roles-event-ticket-booking", "ADMIN"]
+    }
+  ],
   "clients": [
     {
       "clientId": "event-ticket-booking-app",
