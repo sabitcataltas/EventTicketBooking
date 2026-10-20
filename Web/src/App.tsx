@@ -1,6 +1,8 @@
 import { LogoutOutlined } from "@ant-design/icons";
 import { Alert, Button, Layout, Spin, Typography } from "antd";
 import { useAuth, withAuthenticationRequired } from "react-oidc-context";
+import { Route, Routes } from "react-router";
+import { MyBookings } from "./BookingList/MyBookings.tsx";
 import { config } from "./config.ts";
 import { EventList } from "./EventList/EventList.tsx";
 import { useCurrentUser } from "./UserManagement/useCurrentUser.ts";
@@ -37,7 +39,10 @@ function App() {
         {error ? (
           <Alert type="error" title={error} showIcon />
         ) : user ? (
-          <EventList />
+          <Routes>
+            <Route path="/" element={<EventList />} />
+            <Route path="/bookings" element={<MyBookings />} />
+          </Routes>
         ) : (
           <Spin />
         )}

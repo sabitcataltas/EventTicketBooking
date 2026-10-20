@@ -3,6 +3,7 @@ import {
   EditOutlined,
   ShoppingCartOutlined,
   LeftOutlined,
+  OrderedListOutlined,
   PlusOutlined,
   RightOutlined,
 } from "@ant-design/icons";
@@ -19,6 +20,7 @@ import {
 } from "antd";
 import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
+import { useNavigate } from "react-router";
 import { config } from "../config.ts";
 import { hasRealmRole } from "../roles.ts";
 import { BookEventModal } from "./BookEventModal.tsx";
@@ -49,6 +51,7 @@ export function EventList() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Event>();
   const [booking, setBooking] = useState<Event>();
+  const navigate = useNavigate();
   const [reload, setReload] = useState(0);
   const after = cursors.at(-1)!;
 
@@ -103,6 +106,11 @@ export function EventList() {
     },
     { title: "Venue", dataIndex: "venue" },
     { title: "Capacity", dataIndex: "capacity", align: "right" },
+    {
+      title: "Available Tickets",
+      dataIndex: "availableTickets",
+      align: "right",
+    },
     { title: "Description", dataIndex: "description" },
     {
       title: "Actions",
@@ -143,15 +151,23 @@ export function EventList() {
     <Card
       title="Events"
       extra={
-        isAdmin && (
+        <Space>
           <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setAdding(true)}
+            icon={<OrderedListOutlined />}
+            onClick={() => navigate("/bookings")}
           >
-            Add Event
+            My Bookings
           </Button>
-        )
+          {isAdmin && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setAdding(true)}
+            >
+              Add Event
+            </Button>
+          )}
+        </Space>
       }
     >
       <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
