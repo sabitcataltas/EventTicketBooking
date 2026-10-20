@@ -8,4 +8,12 @@ export default defineConfig(
   js.configs.recommended,
   tseslint.configs.recommended,
   prettier,
+  {
+    rules: {
+      "@typescript-eslint/no-empty-object-type": [
+        "error",
+        { allowInterfaces: "always" },
+      ],
+    },
+  },
 );
