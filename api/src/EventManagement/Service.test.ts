@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { NotFoundException } from "@nestjs/common";
+import { ConflictException, NotFoundException } from "@nestjs/common";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { TypeOrmModule, getRepositoryToken } from "@nestjs/typeorm";
 import type { Repository } from "typeorm";
@@ -87,6 +87,27 @@ test("update changes the event and returns it", async () => {
 
 test("update throws NotFoundException for an unknown id", async () => {
   await assert.rejects(service.update(999, concert), NotFoundException);
+});
+
+test("update rejects a concurrent update of the same version with ConflictException", async () => {
+  const created = await service.create(concert);
+
+  const results = await Promise.allSettled([
+    service.update(created.id, { ...created, name: "Opera" }),
+    service.update(created.id, { ...created, name: "Ballet" }),
+  ]);
+
+  const fulfilled = results.filter(
+    (result): result is PromiseFulfilledResult<Event> =>
+      result.status === "fulfilled",
+  );
+  const rejected = results.filter(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  assert.equal(fulfilled.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.ok(rejected[0].reason instanceof ConflictException);
+  assert.deepEqual(await service.read(created.id), fulfilled[0].value);
 });
 
 test("delete removes the event", async () => {
