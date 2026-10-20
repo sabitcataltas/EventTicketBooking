@@ -9,12 +9,16 @@ import {
 import { Test, type TestingModule } from "@nestjs/testing";
 import { TypeOrmModule, getRepositoryToken } from "@nestjs/typeorm";
 import type { Repository } from "typeorm";
-import { Event } from "./Entity.ts";
+import { Booking, BookingStatus, Event } from "./Entity.ts";
 import { EventManagementService, type EventInput } from "./Service.ts";
 
 let moduleRef: TestingModule;
 let service: EventManagementService;
 let repository: Repository<Event>;
+let bookingRepository: Repository<Booking>;
+
+const alice = "6f1c2b8e-3d4a-4b5c-9e7f-0a1b2c3d4e5f";
+const bob = "7a2d3c9f-4e5b-4c6d-8f9a-1b2c3d4e5f6a";
 
 const concert: EventInput = {
   name: "Concert",
@@ -34,22 +38,24 @@ before(async () => {
         username: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
         database: process.env.DB_NAME,
-        entities: [Event],
+        entities: [Event, Booking],
         synchronize: true,
         dropSchema: true,
         timezone: "Z",
       }),
-      TypeOrmModule.forFeature([Event]),
+      TypeOrmModule.forFeature([Event, Booking]),
     ],
     providers: [EventManagementService],
   }).compile();
 
   service = moduleRef.get(EventManagementService);
   repository = moduleRef.get(getRepositoryToken(Event));
+  bookingRepository = moduleRef.get(getRepositoryToken(Booking));
 });
 
 beforeEach(async () => {
   await repository.clear();
+  await bookingRepository.clear();
 });
 
 after(async () => {
@@ -214,5 +220,215 @@ test("list returns no events and keeps the cursor when nothing is left", async (
   assert.deepEqual(await service.list(10, created.id), {
     items: [],
     next: created.id,
+  });
+});
+
+test("createBooking saves a pending booking that expires in 10 minutes", async () => {
+  const event = await service.create(concert);
+  const before = Date.now();
+
+  const booking = await service.createBooking(event.id, alice, 2);
+
+  assert.ok(booking.id);
+  assert.equal(booking.eventId, event.id);
+  assert.equal(booking.userId, alice);
+  assert.equal(booking.quantity, 2);
+  assert.equal(booking.status, BookingStatus.Pending);
+  assert.equal(booking.version, 1);
+  assert.ok(booking.expiresAt >= before + 10 * 60 * 1000);
+  assert.ok(booking.expiresAt <= Date.now() + 10 * 60 * 1000);
+  assert.deepEqual(
+    await bookingRepository.findOneBy({ id: booking.id }),
+    booking,
+  );
+});
+
+test("createBooking takes the tickets from the event and bumps its version", async () => {
+  const event = await service.create(concert);
+
+  await service.createBooking(event.id, alice, 2);
+
+  const updated = await service.read(event.id);
+  assert.equal(updated.availableTickets, 98);
+  assert.equal(updated.version, event.version + 1);
+});
+
+test("createBooking rejects more tickets than available with BadRequestException", async () => {
+  const event = await service.create({ ...concert, capacity: 1 });
+
+  await assert.rejects(
+    service.createBooking(event.id, alice, 2),
+    BadRequestException,
+  );
+  assert.deepEqual(await service.read(event.id), event);
+  assert.equal(await bookingRepository.count(), 0);
+});
+
+test("createBooking throws NotFoundException for an unknown event", async () => {
+  await assert.rejects(service.createBooking(999, alice, 1), NotFoundException);
+  assert.equal(await bookingRepository.count(), 0);
+});
+
+test("createBooking lets only one concurrent booking take the last tickets", async () => {
+  const event = await service.create({ ...concert, capacity: 2 });
+
+  const results = await Promise.allSettled([
+    service.createBooking(event.id, alice, 2),
+    service.createBooking(event.id, bob, 2),
+  ]);
+
+  const rejected = results.filter((result) => result.status === "rejected");
+  assert.equal(rejected.length, 1);
+  assert.ok(rejected[0].reason instanceof BadRequestException);
+  assert.equal((await service.read(event.id)).availableTickets, 0);
+  assert.equal(await bookingRepository.count(), 1);
+});
+
+const setStatus = async (booking: Booking, status: BookingStatus) => {
+  await bookingRepository.update(booking.id, { status });
+  return bookingRepository.findOneByOrFail({ id: booking.id });
+};
+
+test("cancelBooking cancels the booking, bumps its version and returns its tickets", async () => {
+  const event = await service.create(concert);
+  const booking = await service.createBooking(event.id, alice, 2);
+
+  const cancelled = await service.cancelBooking(
+    event.id,
+    booking.id,
+    alice,
+    booking.version,
+  );
+
+  assert.equal(cancelled.status, BookingStatus.Cancelled);
+  assert.equal(cancelled.version, booking.version + 1);
+  assert.deepEqual(cancelled.createdAt, booking.createdAt);
+  assert.deepEqual(
+    await bookingRepository.findOneBy({ id: booking.id }),
+    cancelled,
+  );
+  const updated = await service.read(event.id);
+  assert.equal(updated.availableTickets, 100);
+  assert.equal(updated.version, event.version + 2);
+});
+
+test("cancelBooking cancels a confirmed booking", async () => {
+  const event = await service.create(concert);
+  const booking = await setStatus(
+    await service.createBooking(event.id, alice, 2),
+    BookingStatus.Confirmed,
+  );
+
+  const cancelled = await service.cancelBooking(
+    event.id,
+    booking.id,
+    alice,
+    booking.version,
+  );
+
+  assert.equal(cancelled.status, BookingStatus.Cancelled);
+  assert.equal((await service.read(event.id)).availableTickets, 100);
+});
+
+test("cancelBooking throws NotFoundException for an unknown, foreign or other event booking", async () => {
+  const event = await service.create(concert);
+  const other = await service.create({ ...concert, name: "Opera" });
+  const booking = await service.createBooking(event.id, alice, 2);
+
+  for (const [eventId, bookingId, userId] of [
+    [event.id, 999, alice],
+    [event.id, booking.id, bob],
+    [other.id, booking.id, alice],
+  ] as const) {
+    await assert.rejects(
+      service.cancelBooking(eventId, bookingId, userId, booking.version),
+      NotFoundException,
+    );
+  }
+  assert.deepEqual(
+    await bookingRepository.findOneBy({ id: booking.id }),
+    booking,
+  );
+});
+
+test("cancelBooking rejects a cancelled or expired booking with BadRequestException", async () => {
+  const event = await service.create(concert);
+
+  for (const status of [BookingStatus.Cancelled, BookingStatus.Expired]) {
+    const booking = await setStatus(
+      await service.createBooking(event.id, alice, 2),
+      status,
+    );
+
+    await assert.rejects(
+      service.cancelBooking(event.id, booking.id, alice, booking.version),
+      BadRequestException,
+    );
+  }
+  assert.equal((await service.read(event.id)).availableTickets, 96);
+});
+
+test("cancelBooking rejects a stale version with ConflictException", async () => {
+  const event = await service.create(concert);
+  const booking = await service.createBooking(event.id, alice, 2);
+  const confirmed = await setStatus(booking, BookingStatus.Confirmed);
+
+  await assert.rejects(
+    service.cancelBooking(event.id, booking.id, alice, booking.version),
+    ConflictException,
+  );
+  assert.deepEqual(
+    await bookingRepository.findOneBy({ id: booking.id }),
+    confirmed,
+  );
+  assert.equal((await service.read(event.id)).availableTickets, 98);
+});
+
+test("cancelBooking returns the tickets only once for concurrent cancels", async () => {
+  const event = await service.create(concert);
+  const booking = await service.createBooking(event.id, alice, 2);
+
+  const results = await Promise.allSettled([
+    service.cancelBooking(event.id, booking.id, alice, booking.version),
+    service.cancelBooking(event.id, booking.id, alice, booking.version),
+  ]);
+
+  const rejected = results.filter((result) => result.status === "rejected");
+  assert.equal(rejected.length, 1);
+  assert.ok(
+    rejected[0].reason instanceof ConflictException ||
+      rejected[0].reason instanceof BadRequestException,
+  );
+  assert.equal((await service.read(event.id)).availableTickets, 100);
+});
+
+test("listBookings returns only the user's bookings ordered by id", async () => {
+  const event = await service.create(concert);
+  const first = await service.createBooking(event.id, alice, 1);
+  await service.createBooking(event.id, bob, 1);
+  const second = await service.createBooking(event.id, alice, 2);
+
+  assert.deepEqual(await service.listBookings(alice), {
+    items: [first, second],
+    next: second.id,
+  });
+});
+
+test("listBookings returns at most limit bookings after the given cursor", async () => {
+  const event = await service.create(concert);
+  const first = await service.createBooking(event.id, alice, 1);
+  const second = await service.createBooking(event.id, alice, 1);
+  await service.createBooking(event.id, alice, 1);
+
+  assert.deepEqual(await service.listBookings(alice, 1, first.id), {
+    items: [second],
+    next: second.id,
+  });
+});
+
+test("listBookings returns no bookings and keeps the cursor when nothing is left", async () => {
+  assert.deepEqual(await service.listBookings(alice, 10, 5), {
+    items: [],
+    next: 5,
   });
 });

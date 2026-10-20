@@ -45,3 +45,40 @@ export class Event {
   @VersionColumn()
   version!: number;
 }
+
+export enum BookingStatus {
+  Pending = "PENDING",
+  Confirmed = "CONFIRMED",
+  Cancelled = "CANCELLED",
+  Expired = "EXPIRED",
+}
+
+@Entity("bookings")
+export class Booking {
+  @PrimaryGeneratedColumn()
+  id!: number;
+
+  @Column({ type: "varchar", length: 36 })
+  userId!: string;
+
+  @Column({ type: "int" })
+  eventId!: number;
+
+  @Column({ type: "int" })
+  quantity!: number;
+
+  @Column({ type: "enum", enum: BookingStatus, default: BookingStatus.Pending })
+  status!: BookingStatus;
+
+  @Column({ type: "bigint", transformer: millis })
+  expiresAt!: number;
+
+  @CreateDateColumn({ type: "datetime" })
+  createdAt!: Date;
+
+  @UpdateDateColumn({ type: "datetime" })
+  updatedAt!: Date;
+
+  @VersionColumn()
+  version!: number;
+}

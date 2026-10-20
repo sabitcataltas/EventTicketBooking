@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { Test } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { EventManagementController } from "./Controller.ts";
-import { Event } from "./Entity.ts";
+import { Booking, Event } from "./Entity.ts";
 import { EventManagementService } from "./Service.ts";
 
 test("EventManagement controller and service resolve", async () => {
@@ -13,6 +13,7 @@ test("EventManagement controller and service resolve", async () => {
     providers: [
       EventManagementService,
       { provide: getRepositoryToken(Event), useValue: {} },
+      { provide: getRepositoryToken(Booking), useValue: {} },
     ],
   }).compile();
 

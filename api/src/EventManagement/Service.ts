@@ -5,8 +5,10 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { MoreThan, Repository } from "typeorm";
-import { Event } from "./Entity.ts";
+import { MoreThan, Repository, type EntityManager } from "typeorm";
+import { Booking, BookingStatus, Event } from "./Entity.ts";
+
+const bookingHoldMs = 10 * 60 * 1000;
 
 export type EventInput = Omit<
   Event,
@@ -19,6 +21,8 @@ export type EventUpdateInput = EventInput & Pick<Event, "version">;
 export class EventManagementService {
   constructor(
     @InjectRepository(Event) private readonly repository: Repository<Event>,
+    @InjectRepository(Booking)
+    private readonly bookingRepository: Repository<Booking>,
   ) {}
 
   public create(event: EventInput): Promise<Event> {
@@ -80,5 +84,104 @@ export class EventManagementService {
       take: limit,
     });
     return { items, next: items.at(-1)?.id ?? after };
+  }
+
+  public createBooking(
+    eventId: number,
+    userId: string,
+    quantity: number,
+  ): Promise<Booking> {
+    return this.repository.manager.transaction(async (manager) => {
+      const result = await this.shiftAvailableTickets(
+        manager,
+        eventId,
+        -quantity,
+      );
+      if (result.affected === 0) {
+        await this.read(eventId);
+        throw new BadRequestException(
+          `Event ${eventId} does not have ${quantity} available tickets`,
+        );
+      }
+      return manager.save(
+        manager.create(Booking, {
+          eventId,
+          userId,
+          quantity,
+          status: BookingStatus.Pending,
+          expiresAt: Date.now() + bookingHoldMs,
+        }),
+      );
+    });
+  }
+
+  public cancelBooking(
+    eventId: number,
+    bookingId: number,
+    userId: string,
+    version: number,
+  ): Promise<Booking> {
+    return this.repository.manager.transaction(async (manager) => {
+      const booking = await manager.findOneBy(Booking, {
+        id: bookingId,
+        eventId,
+        userId,
+      });
+      if (!booking) {
+        throw new NotFoundException(`Booking ${bookingId} not found`);
+      }
+      if (
+        booking.status !== BookingStatus.Pending &&
+        booking.status !== BookingStatus.Confirmed
+      ) {
+        throw new BadRequestException(
+          `Booking ${bookingId} cannot be cancelled`,
+        );
+      }
+      const result = await manager.update(
+        Booking,
+        { id: bookingId, version },
+        { status: BookingStatus.Cancelled, updatedAt: new Date() },
+      );
+      if (result.affected === 0) {
+        throw new ConflictException(
+          `Booking ${bookingId} was modified concurrently`,
+        );
+      }
+      await this.shiftAvailableTickets(manager, eventId, booking.quantity);
+      return manager.findOneByOrFail(Booking, { id: bookingId });
+    });
+  }
+
+  public async listBookings(
+    userId: string,
+    limit: number = 10,
+    after: number = 0,
+  ): Promise<{ items: Booking[]; next: number }> {
+    const items = await this.bookingRepository.find({
+      where: { userId, id: MoreThan(after) },
+      order: { id: "ASC" },
+      take: limit,
+    });
+    return { items, next: items.at(-1)?.id ?? after };
+  }
+
+  private shiftAvailableTickets(
+    manager: EntityManager,
+    eventId: number,
+    change: number,
+  ) {
+    return manager
+      .createQueryBuilder()
+      .update(Event)
+      .set({
+        availableTickets: () => "availableTickets + :change",
+        version: () => "version + 1",
+      })
+      .where("id = :eventId AND availableTickets + :change >= 0", {
+        eventId,
+        change,
+      })
+      .execute();
   }
 }
