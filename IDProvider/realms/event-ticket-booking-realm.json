@@ -1,6 +1,7 @@
 {
   "realm": "event-ticket-booking",
   "enabled": true,
+  "registrationAllowed": true,
   "clients": [
     {
       "clientId": "event-ticket-booking-app",
