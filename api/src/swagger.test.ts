@@ -37,4 +37,6 @@ test("setupSwagger serves the OpenAPI document for the event endpoints", async (
     ),
     ["limit", "after"],
   );
+  assert.deepEqual(document.security, [{ bearer: [] }]);
+  assert.equal(document.components.securitySchemes.bearer.scheme, "bearer");
 });

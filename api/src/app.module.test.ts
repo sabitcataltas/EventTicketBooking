@@ -16,7 +16,7 @@ test("AppModule bootstraps a Nest application", async () => {
   await app.close();
 });
 
-test("AppModule serves GET /events", async (t) => {
+test("AppModule rejects GET /events without a bearer token", async (t) => {
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
   }).compile();
@@ -27,5 +27,5 @@ test("AppModule serves GET /events", async (t) => {
 
   const response = await fetch(`http://127.0.0.1:${port}/events`);
 
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 401);
 });

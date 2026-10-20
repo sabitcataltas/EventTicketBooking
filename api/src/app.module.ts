@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Event } from "./EventManagement/Entity.ts";
 import { EventManagementModule } from "./EventManagement/Module.ts";
+import { SecurityModule } from "./Security/Module.ts";
 import { User } from "./UserManagement/Entity.ts";
 import { UserManagementModule } from "./UserManagement/Module.ts";
 
@@ -23,6 +24,7 @@ import { UserManagementModule } from "./UserManagement/Module.ts";
         timezone: "Z",
       }),
     }),
+    SecurityModule,
     EventManagementModule,
     UserManagementModule,
   ],
