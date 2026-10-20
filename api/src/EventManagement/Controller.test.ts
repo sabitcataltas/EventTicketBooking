@@ -2,7 +2,10 @@ import "reflect-metadata";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import { ConflictException, type INestApplication } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { Test } from "@nestjs/testing";
+import { SecurityGuard } from "../Security/Guard.ts";
+import { SecurityService } from "../Security/Service.ts";
 import { EventManagementController } from "./Controller.ts";
 import { EventManagementService } from "./Service.ts";
 
@@ -56,10 +59,23 @@ const service = {
   },
 };
 
-const send = (method: string, path: string, body?: unknown) =>
+const security = {
+  verify: async (token: string) => ({
+    sub: token,
+    email: `${token}@example.com`,
+    realm_access: { roles: [token.toUpperCase()] },
+  }),
+};
+
+const send = (
+  method: string,
+  path: string,
+  body?: unknown,
+  authorization = "Bearer admin",
+) =>
   fetch(`${baseUrl}${path}`, {
     method,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", authorization },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
@@ -68,7 +84,11 @@ const plain = (value: unknown) => JSON.parse(JSON.stringify(value));
 before(async () => {
   const moduleRef = await Test.createTestingModule({
     controllers: [EventManagementController],
-    providers: [{ provide: EventManagementService, useValue: service }],
+    providers: [
+      { provide: EventManagementService, useValue: service },
+      { provide: SecurityService, useValue: security },
+      { provide: APP_GUARD, useClass: SecurityGuard },
+    ],
   }).compile();
   app = moduleRef.createNestApplication();
   await app.listen(0);
@@ -210,4 +230,39 @@ test("DELETE /events/:id deletes an event", async () => {
 
   assert.equal(response.status, 204);
   assert.deepEqual(calls, [{ method: "delete", args: [1] }]);
+});
+
+test("a customer can list and read events", async () => {
+  for (const path of ["/events", "/events/1"]) {
+    const response = await send("GET", path, undefined, "Bearer customer");
+    assert.equal(response.status, 200, path);
+  }
+});
+
+test("a customer cannot create, update or delete events", async () => {
+  const requests: [string, string, unknown][] = [
+    ["POST", "/events", concert],
+    ["PUT", "/events/1", { ...concert, version: 1 }],
+    ["DELETE", "/events/1", undefined],
+  ];
+
+  for (const [method, path, body] of requests) {
+    const response = await send(method, path, body, "Bearer customer");
+    assert.equal(response.status, 403, method);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test("every event endpoint requires a bearer token", async () => {
+  for (const [method, path] of [
+    ["GET", "/events"],
+    ["GET", "/events/1"],
+    ["POST", "/events"],
+    ["PUT", "/events/1"],
+    ["DELETE", "/events/1"],
+  ]) {
+    const response = await send(method, path, undefined, "");
+    assert.equal(response.status, 401, `${method} ${path}`);
+  }
+  assert.deepEqual(calls, []);
 });

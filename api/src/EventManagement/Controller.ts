@@ -12,6 +12,8 @@ import {
   Query,
 } from "@nestjs/common";
 import { ApiBody } from "@nestjs/swagger";
+import { Roles } from "../Security/Roles.ts";
+import { UserRole } from "../UserManagement/Entity.ts";
 import { ApiQueryFrom, ZodValidationPipe, toOpenApi } from "../validation.ts";
 import {
   createEventSchema,
@@ -29,6 +31,7 @@ export class EventManagementController {
   constructor(private readonly service: EventManagementService) {}
 
   @Post()
+  @Roles([UserRole.Admin])
   @ApiBody({ schema: toOpenApi(createEventSchema) })
   public create(
     @Body(new ZodValidationPipe(createEventSchema)) body: CreateEventDto,
@@ -51,6 +54,7 @@ export class EventManagementController {
   }
 
   @Put(":id")
+  @Roles([UserRole.Admin])
   @ApiBody({ schema: toOpenApi(updateEventSchema) })
   public update(
     @Param("id", ParseIntPipe) id: number,
@@ -60,6 +64,7 @@ export class EventManagementController {
   }
 
   @Delete(":id")
+  @Roles([UserRole.Admin])
   @HttpCode(HttpStatus.NO_CONTENT)
   public delete(@Param("id", ParseIntPipe) id: number): Promise<void> {
     return this.service.delete(id);
