@@ -2,7 +2,7 @@
 
 This is a monorepo managed with npm workspaces. Each package lives in its own top-level directory and is listed under `workspaces` in the root `package.json`.
 
-- `api/` — backend API (Node.js, TypeScript run natively via `node`, tests with `node --test`)
+- `Api/` — backend API (Node.js, TypeScript run natively via `node`, tests with `node --test`)
 
 Shared tooling lives at the root and applies to all workspaces:
 

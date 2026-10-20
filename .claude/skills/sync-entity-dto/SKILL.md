@@ -1,11 +1,11 @@
 ---
 name: sync-entity-dto
-description: Keep DTOs in sync with entities. Use whenever a TypeORM entity/model (any `*/Entity.ts` in api/src) is created or changed — a column added, removed, renamed, retyped, or its length/nullability/default changed — so the module's `Dto.ts` zod schemas, the Service input types, and the tests are updated in the same change.
+description: Keep DTOs in sync with entities. Use whenever a TypeORM entity/model (any `*/Entity.ts` in Api/src) is created or changed — a column added, removed, renamed, retyped, or its length/nullability/default changed — so the module's `Dto.ts` zod schemas, the Service input types, and the tests are updated in the same change.
 ---
 
 # Sync entity changes to DTOs
 
-In this repo every module folder under `api/src/<Module>/` has:
+In this repo every module folder under `Api/src/<Module>/` has:
 
 - `Entity.ts` — TypeORM entity (source of truth for persisted fields)
 - `Dto.ts` — zod schemas (`create<X>Schema`, `update<X>Schema`, query schemas) and the `z.output` DTO types
@@ -16,7 +16,7 @@ An entity change is not done until the DTO matches it.
 
 ## Steps
 
-1. Diff the entity (`git diff -- api/src/<Module>/Entity.ts`) and list every field that was added, removed, renamed, or changed.
+1. Diff the entity (`git diff -- Api/src/<Module>/Entity.ts`) and list every field that was added, removed, renamed, or changed.
 2. Decide which fields are client-writable. Server-managed columns stay out of create/update schemas: `@PrimaryGeneratedColumn`, `@CreateDateColumn`, `@UpdateDateColumn`, `@VersionColumn`. Exception: `version` is required in the update schema (optimistic locking — the client sends the version it last read).
 3. Update `Dto.ts` so each writable field mirrors the column:
 
