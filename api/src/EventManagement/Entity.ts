@@ -33,6 +33,9 @@ export class Event {
   @Column({ type: "int" })
   capacity!: number;
 
+  @Column({ type: "int" })
+  availableTickets!: number;
+
   @CreateDateColumn({ type: "datetime" })
   createdAt!: Date;
 

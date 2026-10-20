@@ -20,6 +20,7 @@ const concert = {
 const saved = {
   id: 1,
   ...concert,
+  availableTickets: 100,
   createdAt: new Date("2026-10-20T10:00:00.000Z"),
   updatedAt: new Date("2026-10-20T10:00:00.000Z"),
   version: 1,
@@ -135,6 +136,7 @@ test("POST /events rejects an invalid body with 400", async () => {
     { ...concert, date: 1.5 },
     { ...concert, capacity: 0 },
     { ...concert, capacity: "100" },
+    { ...concert, availableTickets: 5 },
     { ...concert, unknown: true },
   ];
 

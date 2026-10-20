@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -9,7 +10,7 @@ import { Event } from "./Entity.ts";
 
 export type EventInput = Omit<
   Event,
-  "id" | "createdAt" | "updatedAt" | "version"
+  "id" | "availableTickets" | "createdAt" | "updatedAt" | "version"
 >;
 
 export type EventUpdateInput = EventInput & Pick<Event, "version">;
@@ -21,7 +22,9 @@ export class EventManagementService {
   ) {}
 
   public create(event: EventInput): Promise<Event> {
-    return this.repository.save(this.repository.create(event));
+    return this.repository.save(
+      this.repository.create({ ...event, availableTickets: event.capacity }),
+    );
   }
 
   public async read(id: number): Promise<Event> {
@@ -36,10 +39,25 @@ export class EventManagementService {
     id: number,
     { name, description, venue, date, capacity, version }: EventUpdateInput,
   ): Promise<Event> {
-    await this.read(id);
+    const current = await this.read(id);
+    const availableTickets =
+      current.availableTickets + capacity - current.capacity;
+    if (availableTickets < 0) {
+      throw new BadRequestException(
+        `Event ${id} capacity cannot be lower than its sold tickets`,
+      );
+    }
     const result = await this.repository.update(
       { id, version },
-      { name, description, venue, date, capacity, updatedAt: new Date() },
+      {
+        name,
+        description,
+        venue,
+        date,
+        capacity,
+        availableTickets,
+        updatedAt: new Date(),
+      },
     );
     if (result.affected === 0) {
       throw new ConflictException(`Event ${id} was modified concurrently`);

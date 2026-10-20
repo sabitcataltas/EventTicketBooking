@@ -1,7 +1,11 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { ConflictException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from "@nestjs/common";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { TypeOrmModule, getRepositoryToken } from "@nestjs/typeorm";
 import type { Repository } from "typeorm";
@@ -72,6 +76,12 @@ test("create stores the date as milliseconds", async () => {
   assert.equal(Number(row.date), concert.date);
 });
 
+test("create starts with every ticket available", async () => {
+  const created = await service.create(concert);
+
+  assert.equal(created.availableTickets, concert.capacity);
+});
+
 test("read returns the event with the given id", async () => {
   const created = await service.create(concert);
 
@@ -99,6 +109,31 @@ test("update changes the event, bumps the version and refreshes updatedAt", asyn
   assert.ok(updated.updatedAt.getTime() >= created.updatedAt.getTime());
   assert.equal(updated.version, created.version + 1);
   assert.deepEqual(await service.read(created.id), updated);
+});
+
+test("update shifts the available tickets by the capacity change", async () => {
+  const created = await service.create(concert);
+  await repository.update(created.id, { availableTickets: 70 });
+  const { version } = await service.read(created.id);
+
+  const updated = await service.update(created.id, {
+    ...concert,
+    capacity: 150,
+    version,
+  });
+
+  assert.equal(updated.availableTickets, 120);
+});
+
+test("update rejects a capacity below the sold tickets with BadRequestException", async () => {
+  const created = await service.create(concert);
+  await repository.update(created.id, { availableTickets: 70 });
+  const { version } = await service.read(created.id);
+
+  await assert.rejects(
+    service.update(created.id, { ...concert, capacity: 29, version }),
+    BadRequestException,
+  );
 });
 
 test("update throws NotFoundException for an unknown id", async () => {
