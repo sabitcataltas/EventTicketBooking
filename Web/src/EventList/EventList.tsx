@@ -1,6 +1,7 @@
 import {
   DeleteOutlined,
   EditOutlined,
+  ShoppingCartOutlined,
   LeftOutlined,
   PlusOutlined,
   RightOutlined,
@@ -20,6 +21,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { config } from "../config.ts";
 import { hasRealmRole } from "../roles.ts";
+import { BookEventModal } from "./BookEventModal.tsx";
 import { EventModal } from "./EventModal.tsx";
 
 export type Event = {
@@ -29,6 +31,7 @@ export type Event = {
   venue: string;
   date: number;
   capacity: number;
+  availableTickets: number;
   version: number;
 };
 
@@ -45,6 +48,7 @@ export function EventList() {
   const [error, setError] = useState<string>();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Event>();
+  const [booking, setBooking] = useState<Event>();
   const [reload, setReload] = useState(0);
   const after = cursors.at(-1)!;
 
@@ -100,34 +104,39 @@ export function EventList() {
     { title: "Venue", dataIndex: "venue" },
     { title: "Capacity", dataIndex: "capacity", align: "right" },
     { title: "Description", dataIndex: "description" },
-    ...(isAdmin
-      ? [
-          {
-            title: "Actions",
-            key: "actions",
-            render: (_: unknown, event: Event) => (
-              <Space>
-                <Button
-                  icon={<EditOutlined />}
-                  onClick={() => setEditing(event)}
-                >
-                  Edit
+    {
+      title: "Actions",
+      key: "actions",
+      render: (_: unknown, event: Event) => (
+        <Space>
+          <Button
+            type="primary"
+            icon={<ShoppingCartOutlined />}
+            disabled={event.availableTickets === 0}
+            onClick={() => setBooking(event)}
+          >
+            Book
+          </Button>
+          {isAdmin && (
+            <>
+              <Button icon={<EditOutlined />} onClick={() => setEditing(event)}>
+                Edit
+              </Button>
+              <Popconfirm
+                title="Delete this event?"
+                okText="Delete"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => remove(event)}
+              >
+                <Button danger icon={<DeleteOutlined />}>
+                  Delete
                 </Button>
-                <Popconfirm
-                  title="Delete this event?"
-                  okText="Delete"
-                  okButtonProps={{ danger: true }}
-                  onConfirm={() => remove(event)}
-                >
-                  <Button danger icon={<DeleteOutlined />}>
-                    Delete
-                  </Button>
-                </Popconfirm>
-              </Space>
-            ),
-          },
-        ]
-      : []),
+              </Popconfirm>
+            </>
+          )}
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -188,6 +197,14 @@ export function EventList() {
         onClose={() => setEditing(undefined)}
         onSaved={() => {
           setEditing(undefined);
+          setReload(reload + 1);
+        }}
+      />
+      <BookEventModal
+        event={booking}
+        onClose={() => setBooking(undefined)}
+        onBooked={() => {
+          setBooking(undefined);
           setReload(reload + 1);
         }}
       />
