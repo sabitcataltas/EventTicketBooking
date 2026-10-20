@@ -1,3 +1,14 @@
+import { LeftOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Flex,
+  Space,
+  Table,
+  Typography,
+  type TableColumnsType,
+} from "antd";
 import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { config } from "../config.ts";
@@ -55,45 +66,56 @@ export function EventList() {
 
   const hasNext = page?.items.length === pageSize;
 
+  const columns: TableColumnsType<Event> = [
+    { title: "Name", dataIndex: "name" },
+    {
+      title: "Date",
+      dataIndex: "date",
+      render: (date: number) => new Date(date).toLocaleString(),
+    },
+    { title: "Venue", dataIndex: "venue" },
+    { title: "Capacity", dataIndex: "capacity", align: "right" },
+    { title: "Description", dataIndex: "description" },
+  ];
+
   return (
-    <section>
-      <header>
-        <h2>Events</h2>
-        {isAdmin && <button type="button">Add Event</button>}
-      </header>
-      {error && <p role="alert">{error}</p>}
-      {page && page.items.length === 0 && <p>No events found.</p>}
-      {page && page.items.length > 0 && (
-        <ul>
-          {page.items.map((event) => (
-            <li key={event.id}>
-              <h3>{event.name}</h3>
-              <p>
-                {new Date(event.date).toLocaleString()} · {event.venue} ·
-                Capacity {event.capacity}
-              </p>
-              {event.description && <p>{event.description}</p>}
-            </li>
-          ))}
-        </ul>
-      )}
-      <nav>
-        <button
-          type="button"
-          disabled={cursors.length === 1}
-          onClick={() => setCursors(cursors.slice(0, -1))}
-        >
-          Previous
-        </button>
-        <span>Page {cursors.length}</span>
-        <button
-          type="button"
-          disabled={!hasNext}
-          onClick={() => setCursors([...cursors, page!.next])}
-        >
-          Next
-        </button>
-      </nav>
-    </section>
+    <Card
+      title="Events"
+      extra={
+        isAdmin && (
+          <Button type="primary" icon={<PlusOutlined />}>
+            Add Event
+          </Button>
+        )
+      }
+    >
+      <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
+        {error && <Alert type="error" title={error} showIcon />}
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={page?.items}
+          loading={!page && !error}
+          pagination={false}
+          locale={{ emptyText: "No events found." }}
+        />
+        <Flex justify="end" align="center" gap="small">
+          <Button
+            icon={<LeftOutlined />}
+            disabled={cursors.length === 1}
+            onClick={() => setCursors(cursors.slice(0, -1))}
+          >
+            Previous
+          </Button>
+          <Typography.Text>Page {cursors.length}</Typography.Text>
+          <Button
+            disabled={!hasNext}
+            onClick={() => setCursors([...cursors, page!.next])}
+          >
+            Next <RightOutlined />
+          </Button>
+        </Flex>
+      </Space>
+    </Card>
   );
 }
