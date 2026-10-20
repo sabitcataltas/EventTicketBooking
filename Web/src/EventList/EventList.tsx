@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { useNavigate } from "react-router";
 import { config } from "../config.ts";
+import { errorMessage } from "../errorMessage.ts";
 import { hasRealmRole } from "../roles.ts";
 import { BookEventModal } from "./BookEventModal.tsx";
 import { EventModal } from "./EventModal.tsx";
@@ -65,9 +66,11 @@ export function EventList() {
       headers: { authorization: `Bearer ${accessToken}` },
       signal: controller.signal,
     })
-      .then((response) => {
+      .then(async (response) => {
         if (!response.ok) {
-          throw new Error(`Failed to load events (${response.status})`);
+          throw new Error(
+            await errorMessage(response, "Failed to load events"),
+          );
         }
         return response.json() as Promise<EventPage>;
       })
@@ -91,7 +94,7 @@ export function EventList() {
       headers: { authorization: `Bearer ${accessToken}` },
     });
     if (!response.ok) {
-      setError(`Failed to delete event (${response.status})`);
+      setError(await errorMessage(response, "Failed to delete event"));
       return;
     }
     setReload(reload + 1);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { config } from "../config.ts";
+import { errorMessage } from "../errorMessage.ts";
 
 export type User = {
   id: string;
@@ -29,9 +30,9 @@ export function useCurrentUser() {
       .then((response) =>
         response.status === 404 ? request("POST") : response,
       )
-      .then((response) => {
+      .then(async (response) => {
         if (!response.ok) {
-          throw new Error(`Failed to load user (${response.status})`);
+          throw new Error(await errorMessage(response, "Failed to load user"));
         }
         return response.json() as Promise<User>;
       })

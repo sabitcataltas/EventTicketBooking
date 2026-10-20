@@ -2,6 +2,7 @@ import { Alert, Form, InputNumber, Modal, Typography } from "antd";
 import { useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { config } from "../config.ts";
+import { errorMessage } from "../errorMessage.ts";
 import type { Event } from "./EventList.tsx";
 
 type BookEventForm = {
@@ -40,7 +41,7 @@ export function BookEventModal({
         },
       );
       if (!response.ok) {
-        throw new Error(`Failed to book event (${response.status})`);
+        throw new Error(await errorMessage(response, "Failed to book event"));
       }
       form.resetFields();
       onBooked();

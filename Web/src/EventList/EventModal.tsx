@@ -11,6 +11,7 @@ import dayjs from "dayjs";
 import { useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { config } from "../config.ts";
+import { errorMessage } from "../errorMessage.ts";
 import type { Event } from "./EventList.tsx";
 
 type EventForm = {
@@ -58,7 +59,10 @@ export function EventModal({ open, event, onClose, onSaved }: EventModalProps) {
       );
       if (!response.ok) {
         throw new Error(
-          `Failed to ${event ? "update" : "create"} event (${response.status})`,
+          await errorMessage(
+            response,
+            `Failed to ${event ? "update" : "create"} event`,
+          ),
         );
       }
       form.resetFields();

@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { useNavigate } from "react-router";
 import { config } from "../config.ts";
+import { errorMessage } from "../errorMessage.ts";
 
 type BookingStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "EXPIRED";
 
@@ -64,9 +65,11 @@ export function MyBookings() {
       headers: { authorization: `Bearer ${accessToken}` },
       signal: controller.signal,
     })
-      .then((response) => {
+      .then(async (response) => {
         if (!response.ok) {
-          throw new Error(`Failed to load bookings (${response.status})`);
+          throw new Error(
+            await errorMessage(response, "Failed to load bookings"),
+          );
         }
         return response.json() as Promise<BookingPage>;
       })
@@ -95,7 +98,7 @@ export function MyBookings() {
       },
     );
     if (!response.ok) {
-      setError(`Failed to cancel booking (${response.status})`);
+      setError(await errorMessage(response, "Failed to cancel booking"));
       return;
     }
     setReload(reload + 1);
