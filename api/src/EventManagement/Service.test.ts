@@ -142,6 +142,40 @@ test("update rejects a capacity below the sold tickets with BadRequestException"
   );
 });
 
+test("update rejects a stale version with ConflictException before checking capacity", async () => {
+  const created = await service.create(concert);
+  await service.createBooking(created.id, alice, 2);
+
+  await assert.rejects(
+    service.update(created.id, {
+      ...concert,
+      capacity: 1,
+      version: created.version,
+    }),
+    ConflictException,
+  );
+});
+
+test("update keeps the available tickets consistent with concurrent bookings", async () => {
+  const created = await service.create(concert);
+
+  await Promise.allSettled([
+    service.update(created.id, {
+      ...concert,
+      capacity: 50,
+      version: created.version,
+    }),
+    service.createBooking(created.id, alice, 2),
+    service.createBooking(created.id, bob, 3),
+  ]);
+
+  const event = await service.read(created.id);
+  const booked = await bookingRepository.sum("quantity", {
+    eventId: created.id,
+  });
+  assert.equal(event.capacity - event.availableTickets, booked ?? 0);
+});
+
 test("update throws NotFoundException for an unknown id", async () => {
   await assert.rejects(
     service.update(999, { ...concert, version: 1 }),
@@ -400,6 +434,37 @@ test("cancelBooking returns the tickets only once for concurrent cancels", async
       rejected[0].reason instanceof BadRequestException,
   );
   assert.equal((await service.read(event.id)).availableTickets, 100);
+});
+
+test("cancelBooking throws NotFoundException and keeps the booking when the event is gone", async () => {
+  const event = await service.create(concert);
+  const booking = await service.createBooking(event.id, alice, 2);
+  await repository.delete(event.id);
+
+  await assert.rejects(
+    service.cancelBooking(event.id, booking.id, alice, booking.version),
+    NotFoundException,
+  );
+  assert.deepEqual(
+    await bookingRepository.findOneBy({ id: booking.id }),
+    booking,
+  );
+});
+
+test("cancelBooking rejects returning tickets beyond the capacity with ConflictException", async () => {
+  const event = await service.create(concert);
+  const booking = await service.createBooking(event.id, alice, 2);
+  await repository.update(event.id, { availableTickets: 99 });
+
+  await assert.rejects(
+    service.cancelBooking(event.id, booking.id, alice, booking.version),
+    ConflictException,
+  );
+  assert.deepEqual(
+    await bookingRepository.findOneBy({ id: booking.id }),
+    booking,
+  );
+  assert.equal((await service.read(event.id)).availableTickets, 99);
 });
 
 test("listBookings returns only the user's bookings ordered by id", async () => {

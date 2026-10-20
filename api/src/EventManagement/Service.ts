@@ -43,28 +43,31 @@ export class EventManagementService {
     id: number,
     { name, description, venue, date, capacity, version }: EventUpdateInput,
   ): Promise<Event> {
-    const current = await this.read(id);
-    const availableTickets =
-      current.availableTickets + capacity - current.capacity;
-    if (availableTickets < 0) {
-      throw new BadRequestException(
-        `Event ${id} capacity cannot be lower than its sold tickets`,
-      );
-    }
-    const result = await this.repository.update(
-      { id, version },
-      {
+    const result = await this.repository
+      .createQueryBuilder()
+      .update(Event)
+      .set({
+        availableTickets: () => "availableTickets + :capacity - capacity",
         name,
         description,
         venue,
         date,
         capacity,
-        availableTickets,
         updatedAt: new Date(),
-      },
-    );
+      })
+      .where(
+        "id = :id AND version = :version AND availableTickets + :capacity - capacity >= 0",
+        { id, version, capacity },
+      )
+      .execute();
     if (result.affected === 0) {
-      throw new ConflictException(`Event ${id} was modified concurrently`);
+      const current = await this.read(id);
+      if (current.version !== version) {
+        throw new ConflictException(`Event ${id} was modified concurrently`);
+      }
+      throw new BadRequestException(
+        `Event ${id} capacity cannot be lower than its sold tickets`,
+      );
     }
     return this.read(id);
   }
@@ -148,7 +151,17 @@ export class EventManagementService {
           `Booking ${bookingId} was modified concurrently`,
         );
       }
-      await this.shiftAvailableTickets(manager, eventId, booking.quantity);
+      const shifted = await this.shiftAvailableTickets(
+        manager,
+        eventId,
+        booking.quantity,
+      );
+      if (shifted.affected === 0) {
+        await this.read(eventId);
+        throw new ConflictException(
+          `Event ${eventId} cannot take back ${booking.quantity} tickets`,
+        );
+      }
       return manager.findOneByOrFail(Booking, { id: bookingId });
     });
   }
@@ -178,10 +191,13 @@ export class EventManagementService {
         availableTickets: () => "availableTickets + :change",
         version: () => "version + 1",
       })
-      .where("id = :eventId AND availableTickets + :change >= 0", {
-        eventId,
-        change,
-      })
+      .where(
+        "id = :eventId AND availableTickets + :change BETWEEN 0 AND capacity",
+        {
+          eventId,
+          change,
+        },
+      )
       .execute();
   }
 }
