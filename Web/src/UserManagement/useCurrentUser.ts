@@ -21,7 +21,7 @@ export function useCurrentUser() {
     }
     const controller = new AbortController();
     const request = (method: "GET" | "POST") =>
-      fetch(`${config.apiUrl}/me`, {
+      fetch(`${config.apiUrl}/users/me`, {
         method,
         headers: { authorization: `Bearer ${accessToken}` },
         signal: controller.signal,

@@ -34,7 +34,7 @@ import { UserManagementModule } from "./UserManagement/Module.ts";
       ? [
           ServeStaticModule.forRoot({
             rootPath: process.env.WEB_DIST_DIR,
-            serveRoot: "/app",
+            exclude: /^\/api(\/|$)/,
           }),
         ]
       : []),

@@ -3,16 +3,16 @@ import { CurrentUser, type Principal } from "../Security/Roles.ts";
 import type { User } from "./Entity.ts";
 import { UserManagementService } from "./Service.ts";
 
-@Controller("me")
+@Controller("users")
 export class UserManagementController {
   constructor(private readonly service: UserManagementService) {}
 
-  @Get()
+  @Get("me")
   public read(@CurrentUser() user: Principal): Promise<User> {
     return this.service.read(user.id);
   }
 
-  @Post()
+  @Post("me")
   public save(@CurrentUser() user: Principal): Promise<User> {
     return this.service.save(user);
   }

@@ -8,11 +8,11 @@ COPY MockPaymentService/package.json MockPaymentService/
 FROM base AS web
 RUN npm ci -w web --include-workspace-root
 COPY Web Web
-ARG VITE_API_URL=""
+ARG VITE_API_URL=/api
 ARG VITE_OIDC_AUTHORITY=http://localhost:8180/realms/event-ticket-booking
 ARG VITE_OIDC_CLIENT_ID=event-ticket-booking-app
-ARG VITE_OIDC_REDIRECT_URI=http://localhost:3000/app
-RUN npm run build -w web -- --base=/app/
+ARG VITE_OIDC_REDIRECT_URI=http://localhost:3000
+RUN npm run build -w web
 
 FROM base
 RUN npm ci -w api && npm cache clean --force

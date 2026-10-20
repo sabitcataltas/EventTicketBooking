@@ -9,7 +9,7 @@ export function setupSwagger(app: INestApplication): void {
     .addBearerAuth(undefined, "bearer")
     .addSecurityRequirements("bearer")
     .build();
-  SwaggerModule.setup("docs", app, () =>
+  SwaggerModule.setup("api/docs", app, () =>
     SwaggerModule.createDocument(app, config),
   );
 }

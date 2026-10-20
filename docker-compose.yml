@@ -18,16 +18,8 @@ services:
       context: .
       dockerfile: Api/Dockerfile
     profiles: [app]
-    environment:
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_USER: app
-      DB_PASSWORD: app
-      DB_NAME: event_ticket_booking
-      OIDC_ISSUER: http://localhost:8180/realms/event-ticket-booking
-      OIDC_JWKS_URI: http://keycloak:8080/realms/event-ticket-booking/protocol/openid-connect/certs
-      OIDC_CLIENT_ID: event-ticket-booking-app
-      PAYMENT_SERVICE_URL: http://payment:3100
+    env_file:
+      - Api/.env.docker
     ports:
       - "3000:3000"
     depends_on:
