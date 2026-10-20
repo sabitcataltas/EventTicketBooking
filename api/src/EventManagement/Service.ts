@@ -10,13 +10,13 @@ export class EventManagementService {
   ) {}
 
 
-  public create(event :Omit<Event, "id">)
+  public create(event :Omit<Event, "id">) {}
 
   public read(id:string) : Promise<Event> {}
 
-  public update(id:number, event: Omit<Event, "id">)
+  public update(id:number, event: Omit<Event, "id">) {}
 
-  public delete(id:number, event: Omit<Event, "id">)
+  public delete(id:number, event: Omit<Event, "id">) {}
 
   public list() : Promise<{items: Event[], next: number }>{}
 

@@ -16,7 +16,7 @@ const concert: Omit<Event, "id"> = {
   name: "Concert",
   description: "Live music",
   venue: "Arena",
-  date: new Date("2027-01-15T20:00:00.000Z"),
+  date: Date.parse("2027-01-15T20:00:00.000Z"),
   capacity: 100,
 };
 
