@@ -3,6 +3,8 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  ForeignKey,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
   VersionColumn,
@@ -58,6 +60,9 @@ export enum BookingStatus {
 }
 
 @Entity("bookings")
+@Index(["eventId", "status"])
+@Index(["userId", "id"])
+@Index(["status", "expiresAt"])
 export class Booking {
   @PrimaryGeneratedColumn()
   id!: number;
@@ -66,6 +71,7 @@ export class Booking {
   userId!: string;
 
   @Column({ type: "int" })
+  @ForeignKey(() => Event, { onDelete: "RESTRICT" })
   eventId!: number;
 
   @Column({ type: "int" })

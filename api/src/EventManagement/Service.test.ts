@@ -64,8 +64,8 @@ before(async () => {
 
 beforeEach(async () => {
   isPaid = async () => false;
-  await repository.clear();
   await bookingRepository.clear();
+  await repository.createQueryBuilder().delete().execute();
 });
 
 after(async () => {
@@ -658,7 +658,7 @@ test("cancelBooking returns the tickets only once for concurrent cancels", async
 test("cancelBooking throws NotFoundException and keeps the booking when the event is gone", async () => {
   const event = await service.create(concert);
   const booking = await service.createBooking(event.id, alice, 2);
-  await repository.delete(event.id);
+  await repository.softDelete(event.id);
 
   await assert.rejects(
     service.cancelBooking(event.id, booking.id, alice, booking.version),
@@ -831,5 +831,47 @@ test("settlePendingBookings keeps settling the other bookings when one fails", a
   assert.equal(
     (await bookingRepository.findOneByOrFail({ id: paid.id })).status,
     BookingStatus.Confirmed,
+  );
+});
+
+test("bookings cannot reference a missing event", async () => {
+  await assert.rejects(
+    bookingRepository.insert({
+      eventId: 999,
+      userId: alice,
+      quantity: 1,
+      expiresAt: Date.now(),
+    }),
+    /foreign key constraint fails/,
+  );
+});
+
+test("events with bookings cannot be removed", async () => {
+  const event = await service.create(concert);
+  await service.createBooking(event.id, alice, 1);
+
+  await assert.rejects(
+    repository.delete({ id: event.id }),
+    /foreign key constraint fails/,
+  );
+});
+
+test("bookings are indexed for the queries the service runs", async () => {
+  const rows: { Key_name: string; Column_name: string }[] =
+    await bookingRepository.query("SHOW INDEX FROM bookings");
+  const indexes = Object.values(
+    Object.groupBy(rows, (row) => row.Key_name),
+  ).map((columns) => columns!.map((row) => row.Column_name));
+
+  assert.deepEqual(
+    [
+      ["eventId", "status"],
+      ["userId", "id"],
+      ["status", "expiresAt"],
+    ].filter(
+      (expected) =>
+        !indexes.some((columns) => columns.join() === expected.join()),
+    ),
+    [],
   );
 });
